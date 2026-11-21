@@ -307,7 +307,7 @@ public class DoppelgangerMod implements ModInitializer {
         try {
             Path file = mipSettingFile();
             Files.createDirectories(file.getParent());
-            Files.writeString(file, enabled ? "on\\n" : "off\\n", StandardCharsets.UTF_8);
+            Files.writeString(file, enabled ? "on" : "off", StandardCharsets.UTF_8);
             mipEnabled = enabled;
             logMIP("Switched " + (enabled ? "ON" : "OFF") + " by command");
             if (enabled && memories != null) {
