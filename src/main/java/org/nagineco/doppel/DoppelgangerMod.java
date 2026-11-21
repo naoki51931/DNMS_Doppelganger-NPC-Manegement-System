@@ -136,14 +136,24 @@ public class DoppelgangerMod implements ModInitializer {
         playableAutoMove = false;
         loopTick = freePlay ? 0 : Math.min(DAY_TICKS - 1, tracks.get(tracks.size()-1).size());
         lastAutoTick = -1;
+        lastCheckpointTick = Long.MIN_VALUE;
         resetObservations(player);
-        if (!freePlay) brains.get(tracks.size() - 1).resetObservationAnchor(player.getPos());
+        if (!freePlay) {
+            List<Vec3d> active = tracks.get(tracks.size() - 1);
+            if (!active.isEmpty()) {
+                Vec3d last = active.get(active.size() - 1);
+                player.teleport(world, last.x, last.y, last.z, player.getYaw(), player.getPitch());
+            }
+            brains.get(tracks.size() - 1).resetObservationAnchor(player.getPos());
+        }
+        scheduleInitialized = false;
         spawnGhosts();
         report("Resumed JSON snapshot with " + tracks.size() + " recorded Nao tracks.");
         return say(src, "Resumed saved session: " + tracks.size() + "/24 tracks, day " + day
             + ". Automatic movement remains OFF.");
     }
     private static int lastAutoTick = -1;
+    private static long lastCheckpointTick = Long.MIN_VALUE;
     private static boolean lastTickWasAutomatic = false;
 
 
@@ -306,6 +316,7 @@ public class DoppelgangerMod implements ModInitializer {
         brains.add(first);
         world.setTimeOfDay(0);
         resetObservations(player);
+        lastCheckpointTick = Long.MIN_VALUE;
         report("Playable Nao training started; automatic observation enabled.");
         scheduleInitialized = false;
         lastScheduledDay = Long.MIN_VALUE;
@@ -370,9 +381,13 @@ public class DoppelgangerMod implements ModInitializer {
                 ghost.refreshPositionAndAngles(pos.x, pos.y, pos.z, ghost.getYaw(), 0);
             }
         }
-        if (loopTick % 1200 == 0) {
-            try { saveSession(); }
-            catch (IOException ex) { report("Periodic JSON save failed: " + ex.getMessage()); }
+        long serverTick = server.getTicks();
+        if (serverTick - lastCheckpointTick >= 1200 || lastCheckpointTick == Long.MIN_VALUE) {
+            try { saveSession(); lastCheckpointTick = serverTick; }
+            catch (IOException ex) {
+                lastCheckpointTick = serverTick; // Retry at the next interval, not every tick.
+                report("Periodic JSON save failed: " + ex.getMessage());
+            }
         }
         if (freePlay) loopTick = (loopTick + 1) % DAY_TICKS;
         else if (loopTick < DAY_TICKS - 1) loopTick++;
@@ -381,11 +396,11 @@ public class DoppelgangerMod implements ModInitializer {
     private static int next(ServerCommandSource src) {
         if (!recording) return say(src, "Start with /doppel start.");
         if (freePlay) {
+            try { saveSession(); }
+            catch (IOException ex) { return say(src, "Day not advanced because save failed: " + ex.getMessage()); }
             day++;
             loopTick = 0;
             world.setTimeOfDay(0);
-            try { saveSession(); }
-            catch (IOException ex) { return say(src, "Day advanced but save failed: " + ex.getMessage()); }
             return say(src, "Day " + day + " started (AI NPC simulation).");
         }
         ServerPlayerEntity player = src.getServer().getPlayerManager().getPlayer(owner);
