@@ -198,3 +198,10 @@ The separate `patches/nao-growth/` source module is included in `build.gradle`. 
 
 ### Stage 5 limited harvesting (2026-11-21)
 When `/doppel life on` is active, an NPC with the COLLECT goal attempts to harvest one exposed nearby log every 100 loop ticks (at most 4 blocks from its position, up to 64 stored units, energy >= 20). Only oak, birch, spruce, jungle, acacia, dark oak, mangrove, and cherry logs are eligible. `NaoWorkPatch` directly replaces the log with air and credits one item to that Nao's individual JSON inventory in `nao_lives.json`, increments collection skill, consumes energy, and emits a `npc_collect` memory event. No world item entity is dropped, no player tools, loot tables, block hardness, claims/permissions, natural-tree verification or protected-build detection are implemented. **Important: exposed logs in player buildings are NOT protected.** This is an experimental destructive action; test in a disposable world or backup first. No building or cooperative action has been implemented. Existing one-by-one growth and intentional rewind remain unchanged. Build/runtime testing has not been performed.
+
+
+### 後日実装（2026-11-21確定）
+- 建築物を壊さないための保護判定：天然の原木と建築用の原木の識別、保護区域・権限確認。**未実装、後日実装**。
+- 採集対象までの経路探索：障害物を避けて安全に対象へ移動する機能。**未実装、後日実装**。
+- 実装再開時は保護判定を先に、その後に経路探索を実装する。
+- 現在の採集パッチは建築物の原木も破壊し得るため、保護判定実装まではバックアップ済みテストワールドのみで使用する。
