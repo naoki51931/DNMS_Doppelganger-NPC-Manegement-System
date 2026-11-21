@@ -75,6 +75,21 @@ public class DoppelgangerMod implements ModInitializer {
         sharedKnowledge = new SharedMemoryReader(memories.directory().resolve("nao_integrated_memory.md"));
         sharedKnowledge.refresh();
     }
+    private static boolean mannequinAnimation = true;
+    private static Path mannequinAnimationFile() {
+        return FabricLoader.getInstance().getConfigDir().resolve("doppelganger/mannequin-animation.enabled");
+    }
+    private static int appearanceAnimation(ServerCommandSource src, boolean enabled) {
+        if (!isOwner(src)) return say(src, "Only playable Nao may change mannequin animation.");
+        try {
+            Files.createDirectories(mannequinAnimationFile().getParent());
+            Files.writeString(mannequinAnimationFile(), enabled ? "on" : "off", StandardCharsets.UTF_8);
+            mannequinAnimation = enabled;
+            return say(src, "Stand-in walking animation " + (enabled ? "ON" : "OFF"));
+        } catch (IOException ex) {
+            return say(src, "Cannot save mannequin animation setting: " + ex.getMessage());
+        }
+    }
     private static int appearanceStatus(ServerCommandSource src, int slot) {
         if (life == null || slot > life.count()) return say(src, "Nao " + slot + " is not initialized.");
         NaoLifeStore.Nao nao = life.get(slot - 1);
@@ -432,6 +447,12 @@ public class DoppelgangerMod implements ModInitializer {
                     .then(literal("on").executes(c -> lifeToggle(c.getSource(), true)))
                     .then(literal("off").executes(c -> lifeToggle(c.getSource(), false)))
                     .then(literal("status").executes(c -> lifeStatus(c.getSource()))))
+                .then(literal("mannequin")
+                    .then(literal("animation")
+                        .then(literal("on").executes(c -> appearanceAnimation(c.getSource(), true)))
+                        .then(literal("off").executes(c -> appearanceAnimation(c.getSource(), false)))
+                        .then(literal("status").executes(c -> say(c.getSource(),
+                            "Stand-in walking animation " + (mannequinAnimation ? "ON" : "OFF"))))))
                 .then(literal("appearance")
                     .then(literal("status").then(argument("slot", IntegerArgumentType.integer(1, 24))
                         .executes(c -> appearanceStatus(c.getSource(), IntegerArgumentType.getInteger(c, "slot")))))
@@ -622,7 +643,7 @@ public class DoppelgangerMod implements ModInitializer {
                 ? (float) (Math.toDegrees(Math.atan2(dz, dx)) - 90.0)
                 : ghost.getYaw();
             ghost.refreshPositionAndAngles(pos.x, pos.y, pos.z, yaw, 0);
-            if (horizontalDistanceSq > 0.000001) {
+            if (mannequinAnimation && horizontalDistanceSq > 0.000001) {
                 float swing = (float) Math.sin(loopTick * 0.35 + i * 0.7) * 24.0f;
                 ghost.setLeftLegRotation(new EulerAngle(swing, 0, 0));
                 ghost.setRightLegRotation(new EulerAngle(-swing, 0, 0));
