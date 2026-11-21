@@ -23,3 +23,16 @@ Do not claim Minecraft integration, world rollback, actual NPC possession,
 full emotion understanding, or verified build/test results without evidence.
 Keep generated server memory files out of the public repository.
 Do not double-count demonstrations when combining journals and live AI models.
+
+
+## MIP default behavior
+
+The Fabric mod compiles `patches/memory-integration/src` into its main
+source set. MIP defaults ON, persists an explicit on/off toggle in
+`config/doppelganger/mip.enabled`, and integrates after individual journals
+are flushed on `/doppel next` and `/doppel stop` (also at `/doppel start`).
+Commands: `/doppel mip status|logs|run|on|off`. Keep MIP disabled behavior
+non-destructive; do not erase journals or personality. Server logs and the
+20-entry in-memory command log should explain failures without exposing private
+memory contents. Do not double-load the generated index into the existing
+brains.
