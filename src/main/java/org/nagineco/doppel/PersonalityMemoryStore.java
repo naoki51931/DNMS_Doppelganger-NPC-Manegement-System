@@ -105,6 +105,29 @@ public final class PersonalityMemoryStore {
         }
     }
 
+    public void restore(int index, HabitBrain brain) throws IOException {
+        for (String line : Files.readAllLines(memoryPath(index), StandardCharsets.UTF_8)) {
+            if (!line.startsWith("- day=")) continue;
+            String[] tokens = line.split(" ");
+            try {
+                int tick = 0;
+                HabitBrain.Move move = HabitBrain.Move.STAY;
+                HabitBrain.Emotion emotion = HabitBrain.Emotion.NEUTRAL;
+                HabitBrain.Reason reason = HabitBrain.Reason.NONE;
+                for (String token : tokens) {
+                    if (token.startsWith("tick=")) tick = Integer.parseInt(token.substring(5));
+                    if (token.startsWith("action=")) move = HabitBrain.Move.valueOf(token.substring(7));
+                    if (token.startsWith("emotion=")) emotion = HabitBrain.Emotion.valueOf(token.substring(8));
+                    if (token.startsWith("reason=")) reason = HabitBrain.Reason.valueOf(token.substring(7));
+                }
+                brain.learnMemory(move, emotion, reason, tick);
+                eventCounts[index]++;
+            } catch (IllegalArgumentException ignored) {
+                // Skip corrupted entries rather than failing the whole save.
+            }
+        }
+    }
+
     public int eventCount(int index) { return eventCounts[index]; }
     public Path directory() { return directory; }
 
