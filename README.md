@@ -22,6 +22,8 @@ Copy the generated `build/libs/doppelganger-npc-system-0.1.0.jar` into a compati
 - `/doppel next` — finish the current recording, reset the clock and player position, and begin the next loop
 - `/doppel status` — show progress
 - `/doppel select 1` through `/doppel select 24` — after 24 recordings, teleport the player to the selected recorded ghost's current replay position
+- `/doppel emotion curious` — during training, label the player's current self-reported emotion; choices: `neutral`, `happy`, `curious`, `afraid`, `angry`, `sad`
+- `/doppel reason explore` — during training, label the player's current self-reported reason; choices: `none`, `explore`, `build`, `collect`, `safety`, `social`
 - `/doppel ai on` — use learned movement habits for autonomous NPC movement (default)
 - `/doppel ai off` — switch to exact recorded-position replay
 - `/doppel stop` — stop and discard in-memory recordings
@@ -31,7 +33,9 @@ The recording window is at most 24,000 ticks (one standard Minecraft day) per ch
 ### Important limitations
 
 - **No real rewind of the world**: block edits, mobs, weather, player inventory and other game state are NOT restored. Only the clock and player's position are reset.
-- NPC stand-ins are armor stands driven by simple learned directional frequencies (day/night), not full player models, pathfinding agents, or language-model AI.
+- NPC stand-ins are armor stands driven by learned directional frequencies conditioned on day/night and the player's explicitly labeled emotion and reason. They are not full player models, pathfinding agents, or language-model AI.
+- Emotions and reasons are player-supplied annotations, not detected mental states. The last supplied labels persist for the rest of that character's training and later AI behavior. The model does not independently infer changing emotions, nor does it guarantee perfect preference matching.
+- The current policy learns movement direction only. The reason label `build` does not teach actual building, and `collect` does not teach gathering.
 - The learned movement policy has no inventory, mining, building, social behavior or robust collision avoidance. The stand-ins are not real controllable player entities.
 - The `select` command teleports the operator; it does not transfer control to a real NPC or suppress the selected ghost.
 - Recordings are held in memory and lost when the server stops or the mod is stopped.
