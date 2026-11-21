@@ -23,7 +23,7 @@ public final class NaoSocialStore {
         if (!Files.isRegularFile(file)) return;
         try (Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
             Map<String, NaoRelationshipEngine.Relationship> snapshot = GSON.fromJson(reader, TYPE);
-            if (snapshot == null || snapshot.size() > 24 * 23)
+            if (snapshot == null || snapshot.size() > 256 * 255)
                 throw new IOException("Invalid social snapshot size");
             engine.restore(snapshot);
         } catch (RuntimeException ex) { throw new IOException("Malformed social snapshot", ex); }
