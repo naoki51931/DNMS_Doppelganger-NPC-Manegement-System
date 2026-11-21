@@ -729,7 +729,7 @@ public class DoppelgangerMod implements ModInitializer {
         if (owner != null) writeAtomic(sessionOwnerFile(), owner.toString());
         GenerationCheckpointStore.publish(checkpointRoot(), snapshotFile(),
             memories.directory(), playerFile, life == null ? null : lifeFile(),
-            social == null ? null : socialFile());
+            social == null ? null : socialFile(), people == null ? null : peopleFile());
     }
     private static void saveOfflineSession() throws IOException {
         if (memories == null || owner == null || world == null) return;
@@ -741,6 +741,7 @@ public class DoppelgangerMod implements ModInitializer {
         rememberGhostPositions();
         if (life != null) life.save();
         if (social != null) social.save();
+        if (people != null) people.save();
         writeAtomic(sessionOwnerFile(), owner.toString());
         GenerationCheckpointStore.publish(checkpointRoot(), snapshotFile(),
             memories.directory(), playerFile, life == null ? null : lifeFile(),
@@ -792,6 +793,11 @@ public class DoppelgangerMod implements ModInitializer {
                 Files.copy(generation.resolve("nao_social.json"), socialFile(),
                     java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             }
+            if (generation != null && Files.isRegularFile(generation.resolve("people.json"))) {
+                Files.createDirectories(peopleFile().getParent());
+                Files.copy(generation.resolve("people.json"), peopleFile(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
             if (generation != null) GenerationCheckpointStore.restoreMemories(generation,
                 FabricLoader.getInstance().getGameDir().resolve("config/doppelganger/memories"));
             loadedTracks = RecordingSnapshotStore.restoreTracks(snapshot);
@@ -814,6 +820,9 @@ public class DoppelgangerMod implements ModInitializer {
             restoredPlayerState = playerState;
             memories = loadedMemories;
             initializeLife(loadedTracks.size());
+            if (life.count() != loadedTracks.size())
+                throw new IOException("Checkpoint identity count differs from track count: "
+                    + life.count() + " vs " + loadedTracks.size());
             if (restoreOwnerSnapshot && restoredPlayerState != null) PlayerStateStore.restore(player, restoredPlayerState);
         } catch (IOException ex) {
             LOG.warning("Could not resume DNMS session: " + ex.getMessage());
