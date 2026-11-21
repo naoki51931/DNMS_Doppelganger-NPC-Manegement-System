@@ -1,5 +1,20 @@
 # AGENTS.md — Doppel NPC Management System (DNMS)
 
+## 日本語：記憶想起・人物台帳・自律計画（2026-11-21）
+- `/doppel recall <slot> <topic>` は各奈央の個別記憶ファイル（MIP複製済みの他者エピソードを含む）をキーワード検索し、出典付きの一致行を返す。生活AIは長期目標をキーワードとして定期的に記憶を想起し、`lastRecalledMemory` に保持する。**これはルールベースのエピソード検索であり、LLMによる自由な意味理解や会話生成ではない。**
+- `/doppel person add <id>`、`person relate <from> <to> <role>`、`person event <from> <to> <detail>`、`person status <id>`。外部人物と奈央（`nao_1`〜`nao_256`）の人物台帳を `config/doppelganger/people.json` に保存する。関係ラベル：FRIEND, FAMILY, COLLEAGUE, PARTNER, SPOUSE, PARENT, CHILD, HOUSEMATE。相互関係と親子の逆関係を自動登録し、共有イベントを両者へ記録する。結婚式・育児・同居の物理行動は未実装。
+- `/doppel plan <slot>` は長期目標・職業を優先する段階的プラン（OBSERVE→PREPARE→PRACTICE→REVIEW）を表示する。生活AI実行中は定期的に目標に沿った行動カテゴリを選ぶ。**目標達成の意味評価や多段階の実作業は未実装。**
+- 25人以上で操作できなかったプレイアブル選択の24人固定条件を修正。従来の24回の学習ループ完了条件は意図的に24のまま。
+- 現状の人物台帳は独立JSON保存で、世代チェックポイントの原子的な一括復元には未統合。ゲーム実機と大規模256人負荷テストは未実施。
+
+## English: Episodic Recall, People Registry, Autonomous Planning (2026-11-21)
+- `/doppel recall <slot> <topic>` searches each Nao's personal journal including physically replicated MIP episodes, returning a matching attributed line. Life AI periodically recalls using its long-term goal and persists `lastRecalledMemory`. **This is keyword-based recall, not LLM semantic understanding or generative dialogue.**
+- `/doppel person add <id>`, `person relate <from> <to> <role>`, `person event <from> <to> <detail>`, `person status <id>` persist external people and Nao identities (`nao_1` through `nao_256`) in `config/doppelganger/people.json`. Roles: FRIEND, FAMILY, COLLEAGUE, PARTNER, SPOUSE, PARENT, CHILD, HOUSEMATE. Symmetric and parent-child inverse roles and shared event histories are persisted. Physical cohabitation, marriage ceremonies and childcare remain unimplemented.
+- `/doppel plan <slot>` reports a personal ambition-driven staged plan (OBSERVE→PREPARE→PRACTICE→REVIEW). Life AI periodically selects action categories based on long-term goals. **Complex task execution and true achievement verification remain future work.**
+- Fixed the 24-only guard for playable Nao selection after adding more identities. The original 24-loop training-completion condition remains intentionally unchanged.
+- The new people registry is saved separately and is not yet part of an atomic generation checkpoint. Minecraft runtime and large 256-Nao load tests remain outstanding.
+
+
 ## 日本語：256人と全記憶複製（現行実装）
 - 最大人数は**256人**（`/doppel dashboard max 256`、設定ファイル `config/doppelganger/max-naos.txt`）。**初期生成は24人**（`/doppel dashboard bootstrap`）で、フリープレイ中に `/doppel dashboard add <人数>` で追加する。24人の手動訓練は従来どおり。
 - 人数上限を256に拡張した対象：個別UUID・生活データ、プレイアブル選択、スロット引数、記録スナップショット、外見登録、関係保存、個別記憶、世代チェックポイント、MIPの統合対象。
