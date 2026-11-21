@@ -97,3 +97,22 @@ Example in-game training:
 Move around to teach Nao 01, then type `/doppel next` to flush her memory and move to Nao 02. Repeat through Nao 24. Each character's Markdown journal is separate, but their action policy references the same `nao_personality.md`. The decision score combines shared demonstrations, preference affinity and double weight for the current NPC's own experiences.
 
 **Privacy:** journals contain recorded in-game positions and player-supplied emotional labels. Keep the server files private if you do not want to publish them.
+
+## Optional patch: Memory Integration
+
+The standalone **[Memory Integration Patch](patches/memory-integration/README.md)**
+lives under `patches/memory-integration/`, with implementation guidance in
+`patches/memory-integration/AGENTS.md`.
+
+It reads the 24 individual `nao_XX.md` journals and the authoritative
+`nao_personality.md`, then generates an attributed shared index
+`nao_integrated_memory.md`. The source journals and shared personality are
+not overwritten. This is an **offline Java 21 tool**, not yet invoked by the
+Fabric mod or consumed by live NPC decision-making.
+
+From the repository root:
+
+```bash
+javac -d patches/memory-integration/out patches/memory-integration/src/org/nagineco/patch/memoryintegration/MemoryIntegrationPatch.java
+java -cp patches/memory-integration/out org.nagineco.patch.memoryintegration.MemoryIntegrationPatch config/doppelganger/memories
+```
