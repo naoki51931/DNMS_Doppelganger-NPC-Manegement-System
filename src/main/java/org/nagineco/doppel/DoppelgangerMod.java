@@ -55,6 +55,7 @@ public class DoppelgangerMod implements ModInitializer {
     private static boolean aiMode = true;
     private static PersonalityMemoryStore memories;
     private static NaoLifeStore life;
+    private static NaoSocialStore social;
     private static SharedMemoryReader sharedKnowledge;
     private static boolean lifeAiEnabled = false;
     private static Path lifeFile() {
@@ -72,8 +73,31 @@ public class DoppelgangerMod implements ModInitializer {
         try { life.appearanceRegistry(); }
         catch (RuntimeException ex) { throw new IOException("Invalid Nao appearance registry", ex); }
         life.save();
+        social = new NaoSocialStore(FabricLoader.getInstance().getConfigDir().resolve("doppelganger/nao_social.json"));
+        social.load();
         sharedKnowledge = new SharedMemoryReader(memories.directory().resolve("nao_integrated_memory.md"));
         sharedKnowledge.refresh();
+    }
+    private static int socialTalk(ServerCommandSource src, int from, int to) {
+        if (!isOwner(src)) return say(src, "Only playable Nao may trigger social interactions.");
+        if (social == null || life == null || from == to || from > life.count() || to > life.count())
+            return say(src, "Both distinct Nao identities must be initialized.");
+        var result = social.engine().apply(UUID.fromString(life.get(from - 1).id),
+            UUID.fromString(life.get(to - 1).id),
+            org.nagineco.doppel.social.NaoRelationshipEngine.Interaction.TALK);
+        life.observeAction(from - 1, NaoActionLearning.Action.TALK, true);
+        try { social.save(); life.save(); }
+        catch (IOException ex) { return say(src, "Social event applied but persistence failed: " + ex.getMessage()); }
+        return say(src, "Nao " + from + " talked to " + to + "; familiarity=" + result.familiarity());
+    }
+    private static int socialStatus(ServerCommandSource src, int from, int to) {
+        if (social == null || life == null || from == to || from > life.count() || to > life.count())
+            return say(src, "Both distinct Nao identities must be initialized.");
+        var r = social.engine().get(UUID.fromString(life.get(from - 1).id),
+            UUID.fromString(life.get(to - 1).id));
+        return say(src, "Nao " + from + " -> " + to + ": familiarity=" + r.familiarity()
+            + ", trust=" + r.trust() + ", affection=" + r.affection()
+            + ", romanceOptIn=" + r.romanceOptIn());
     }
     private static boolean mannequinAnimation = true;
     private static Path mannequinAnimationFile() {
@@ -214,6 +238,7 @@ public class DoppelgangerMod implements ModInitializer {
         Path playerFile = playerSnapshotFile();
         PlayerStateStore.save(playerFile, player);
         if (life != null) life.save();
+        if (social != null) social.save();
         GenerationCheckpointStore.publish(checkpointRoot(), snapshotFile(),
             memories.directory(), playerFile, life == null ? null : lifeFile());
     }
@@ -455,6 +480,20 @@ public class DoppelgangerMod implements ModInitializer {
                     .then(literal("on").executes(c -> lifeToggle(c.getSource(), true)))
                     .then(literal("off").executes(c -> lifeToggle(c.getSource(), false)))
                     .then(literal("status").executes(c -> lifeStatus(c.getSource()))))
+                .then(literal("social")
+                    .then(literal("talk")
+                        .then(argument("from", IntegerArgumentType.integer(1, 24))
+                            .then(argument("to", IntegerArgumentType.integer(1, 24))
+                                .executes(c -> socialTalk(c.getSource(),
+                                    IntegerArgumentType.getInteger(c, "from"),
+                                    IntegerArgumentType.getInteger(c, "to"))))))
+                    .then(literal("status")
+                        .then(argument("from", IntegerArgumentType.integer(1, 24))
+                            .then(argument("to", IntegerArgumentType.integer(1, 24))
+                                .executes(c -> socialStatus(c.getSource(),
+                                    IntegerArgumentType.getInteger(c, "from"),
+                                    IntegerArgumentType.getInteger(c, "to"))))))
+                )
                 .then(literal("mannequin")
                     .then(literal("animation")
                         .then(literal("on").executes(c -> appearanceAnimation(c.getSource(), true)))
