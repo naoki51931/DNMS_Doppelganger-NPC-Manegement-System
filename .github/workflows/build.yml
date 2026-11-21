@@ -21,6 +21,10 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.10.2'
+      - name: Print build toolchain
+        run: |
+          java -version
+          gradle --version
       - name: Compile and build Fabric mod
         run: |
           if [ -f ./gradlew ]; then
@@ -29,6 +33,16 @@ jobs:
           else
             gradle --no-daemon clean build
           fi
+      - name: Upload test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dnms-build-diagnostics
+          path: |
+            build/reports/tests/**
+            build/test-results/**
+            build/reports/problems/**
+          if-no-files-found: ignore
       - name: Upload built jars
         if: success()
         uses: actions/upload-artifact@v4
