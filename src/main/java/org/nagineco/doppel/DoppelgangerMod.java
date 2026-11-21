@@ -129,7 +129,7 @@ public class DoppelgangerMod implements ModInitializer {
         PlayerStateStore.save(playerFile, player);
         if (life != null) life.save();
         GenerationCheckpointStore.publish(checkpointRoot(), snapshotFile(),
-            memories.directory(), playerFile);
+            memories.directory(), playerFile, life == null ? null : lifeFile());
     }
     private static int saveCommand(ServerCommandSource src) {
         if (!recording) return say(src, "No active session to save.");
@@ -162,6 +162,11 @@ public class DoppelgangerMod implements ModInitializer {
             if (playerState != null && !player.getServerWorld().getRegistryKey().getValue().toString()
                     .equals(playerState.dimension))
                 return say(src, "Move to saved dimension before resuming: " + playerState.dimension);
+            if (generation != null && Files.isRegularFile(generation.resolve("nao_lives.json"))) {
+                Files.createDirectories(lifeFile().getParent());
+                Files.copy(generation.resolve("nao_lives.json"), lifeFile(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
             if (generation != null) GenerationCheckpointStore.restoreMemories(generation,
                 FabricLoader.getInstance().getGameDir().resolve("config/doppelganger/memories"));
             loadedTracks = RecordingSnapshotStore.restoreTracks(snapshot);
