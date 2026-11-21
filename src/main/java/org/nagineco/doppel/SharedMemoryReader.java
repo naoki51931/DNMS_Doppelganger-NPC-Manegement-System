@@ -13,7 +13,7 @@ import net.minecraft.util.math.Vec3d;
  */
 public final class SharedMemoryReader {
     private static final Pattern EVENT = Pattern.compile(
-        "^- nao=(\\d{2}) day=(\\d+) tick=(\\d+) position=\\(([^)]*)\\) action=(STAY|NORTH|SOUTH|WEST|EAST) emotion=([A-Z_]+) reason=([A-Z_]+)$");
+        "^- nao=(\\d{2,3}) day=(\\d+) tick=(\\d+) position=\\(([^)]*)\\) action=(STAY|NORTH|SOUTH|WEST|EAST) emotion=([A-Z_]+) reason=([A-Z_]+)$");
     public record Experience(int nao, int day, int tick, Vec3d position,
                              HabitBrain.Move action, HabitBrain.Reason reason) {}
     private final Path path;
@@ -42,7 +42,7 @@ public final class SharedMemoryReader {
                 int day = Integer.parseInt(m.group(2));
                 int tick = Integer.parseInt(m.group(3));
                 String[] coords = m.group(4).split(",", -1);
-                if (nao < 1 || nao > 24 || day < 1 || tick < 0 || tick >= 24000 || coords.length != 3) continue;
+                if (nao < 1 || nao > 256 || day < 1 || tick < 0 || tick >= 24000 || coords.length != 3) continue;
                 double x = Double.parseDouble(coords[0].trim());
                 double y = Double.parseDouble(coords[1].trim());
                 double z = Double.parseDouble(coords[2].trim());
