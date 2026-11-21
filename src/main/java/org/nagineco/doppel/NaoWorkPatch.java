@@ -1,0 +1,56 @@
+package org.nagineco.doppel;
+
+import net.minecraft.block.BlockState;
+import net.minecraft.block.Blocks;
+import net.minecraft.registry.Registries;
+import net.minecraft.server.world.ServerWorld;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Vec3d;
+import java.util.Optional;
+
+/** Conservative opt-in harvesting: naturally exposed logs only; no drops or tools simulated. */
+public final class NaoWorkPatch {
+    private NaoWorkPatch() {}
+    public static Optional<BlockPos> findLog(ServerWorld world, Vec3d origin) {
+        BlockPos center = BlockPos.ofFloored(origin);
+        for (int radius = 1; radius <= 4; radius++)
+            for (int dy = -1; dy <= 2; dy++)
+                for (int dx = -radius; dx <= radius; dx++)
+                    for (int dz = -radius; dz <= radius; dz++) {
+                        BlockPos p = center.add(dx, dy, dz);
+                        if (!world.isChunkLoaded(p)) continue;
+                        if (!allowed(world.getBlockState(p))) continue;
+                        if (world.getBlockState(p.up()).isAir()
+                            || world.getBlockState(p.north()).isAir()
+                            || world.getBlockState(p.south()).isAir()
+                            || world.getBlockState(p.east()).isAir()
+                            || world.getBlockState(p.west()).isAir())
+                            return Optional.of(p.toImmutable());
+                    }
+        return Optional.empty();
+    }
+    private static boolean allowed(BlockState state) {
+        return state.isOf(Blocks.OAK_LOG) || state.isOf(Blocks.BIRCH_LOG)
+            || state.isOf(Blocks.SPRUCE_LOG) || state.isOf(Blocks.JUNGLE_LOG)
+            || state.isOf(Blocks.ACACIA_LOG) || state.isOf(Blocks.DARK_OAK_LOG)
+            || state.isOf(Blocks.MANGROVE_LOG) || state.isOf(Blocks.CHERRY_LOG);
+    }
+    public static boolean harvest(ServerWorld world, Vec3d origin, NaoLifeStore.Nao nao) {
+        if (nao.inventory == null) nao.inventory = new java.util.HashMap<>();
+        if (nao.inventory.values().stream().mapToInt(Integer::intValue).sum() >= 64) return false;
+        var target = findLog(world, origin);
+        if (target.isEmpty()) return false;
+        BlockPos pos = target.get();
+        if (Vec3d.ofCenter(pos).squaredDistanceTo(origin) > 16) return false;
+        BlockState state = world.getBlockState(pos);
+        if (!allowed(state)) return false;
+        String key = Registries.BLOCK.getId(state.getBlock()).toString();
+        if (!world.setBlockState(pos, Blocks.AIR.getDefaultState(), 3)) return false;
+        nao.inventory.merge(key, 1, Integer::sum);
+        nao.collection++;
+        nao.energy = Math.max(0, nao.energy - 2);
+        nao.lastAction = "HARVEST";
+        nao.lastOutcome = "COLLECTED " + key + " at " + pos.toShortString();
+        return true;
+    }
+}
