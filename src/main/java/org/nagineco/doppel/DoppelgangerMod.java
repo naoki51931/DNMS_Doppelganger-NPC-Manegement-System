@@ -48,6 +48,13 @@ public class DoppelgangerMod implements ModInitializer {
     private static final Logger LOG = Logger.getLogger("Doppelganger.MIP");
     private static final Deque<String> mipLog = new ArrayDeque<>();
     private static boolean mipEnabled = true;
+    private static int mipScheduleTick = 18000; // Minecraft midnight, 00:00
+    private static long lastScheduledDay = Long.MIN_VALUE;
+    private static long lastObservedTime = Long.MIN_VALUE;
+    private static boolean scheduleInitialized = false;
+    private static Path mipScheduleFile() {
+        return FabricLoader.getInstance().getConfigDir().resolve("doppelganger/mip.time");
+    }
     private static Path mipSettingFile() {
         return FabricLoader.getInstance().getConfigDir().resolve("doppelganger/mip.enabled");
     }
@@ -74,7 +81,17 @@ public class DoppelgangerMod implements ModInitializer {
         } catch (IOException ex) {
             logMIP("Could not load enabled setting; using default ON: " + ex.getMessage());
         }
-        logMIP("Initialized; enabled=" + mipEnabled + ". Use /doppel mip status|on|off|run|logs.");
+        try {
+            Path setting = mipScheduleFile();
+            if (Files.exists(setting))
+                mipScheduleTick = parseMinecraftClock(
+                    Files.readString(setting, StandardCharsets.UTF_8).trim());
+        } catch (IOException | IllegalArgumentException ex) {
+            logMIP("Could not load MIP schedule; using 00:00: " + ex.getMessage());
+            mipScheduleTick = 18000;
+        }
+        logMIP("Initialized; enabled=" + mipEnabled + "; daily time="
+            + formatMinecraftClock(mipScheduleTick) + ". Use /doppel mip status|on|off|run|logs|time.");
         CommandRegistrationCallback.EVENT.register((dispatcher, registry, environment) ->
             dispatcher.register(literal("doppel")
                 .requires(s -> s.hasPermissionLevel(2))
@@ -99,7 +116,11 @@ public class DoppelgangerMod implements ModInitializer {
                     .then(literal("on").executes(c -> mipToggle(c.getSource(), true)))
                     .then(literal("off").executes(c -> mipToggle(c.getSource(), false)))
                     .then(literal("run").executes(c -> mipRun(c.getSource())))
-                    .then(literal("logs").executes(c -> mipLogs(c.getSource()))))
+                    .then(literal("logs").executes(c -> mipLogs(c.getSource())))
+                    .then(literal("time").executes(c -> mipTimeStatus(c.getSource()))
+                        .then(argument("clock", StringArgumentType.word())
+                            .executes(c -> mipTimeSet(c.getSource(),
+                                StringArgumentType.getString(c, "clock"))))))
                 .then(literal("stop").executes(c -> stop(c.getSource())))
             )
         );
@@ -121,10 +142,6 @@ public class DoppelgangerMod implements ModInitializer {
             return say(src, "Could not initialize Markdown memories: " + e.getMessage());
         }
         aiMode = true;
-        if (mipEnabled) {
-            try { logMIP(MemoryIntegrationPatch.integrate(memories.directory())); }
-            catch (IOException ex) { logMIP("Initial integration failed: " + ex.getMessage()); }
-        }
         owner = player.getUuid();
         world = player.getServerWorld();
         dawn = player.getBlockPos();
@@ -139,10 +156,13 @@ public class DoppelgangerMod implements ModInitializer {
         catch (IOException e) { return say(src, "Could not read Nao 01 memory: " + e.getMessage()); }
         brains.add(first);
         world.setTimeOfDay(0);
+        scheduleInitialized = false;
+        lastScheduledDay = Long.MIN_VALUE;
         return say(src, "Day 1, loop 1/24. Play, then /doppel next.");
     }
 
     private static void tick(MinecraftServer server) {
+        tickMIP(server);
         if (!recording || world == null || owner == null) return;
         ServerPlayerEntity player = server.getPlayerManager().getPlayer(owner);
         if (player == null || player.getServerWorld() != world) return;
@@ -196,10 +216,9 @@ public class DoppelgangerMod implements ModInitializer {
         if (memories != null) {
             try {
                 memories.flush();
-                if (mipEnabled) logMIP(MemoryIntegrationPatch.integrate(memories.directory()));
             } catch (IOException e) {
-                logMIP("Memory flush/integration failed: " + e.getMessage());
-                return say(src, "Failed to save/integrate memories: " + e.getMessage());
+                logMIP("Memory flush failed: " + e.getMessage());
+                return say(src, "Failed to save memories: " + e.getMessage());
             }
         }
         if (!recording) return say(src, "Start with /doppel start.");
@@ -278,10 +297,9 @@ public class DoppelgangerMod implements ModInitializer {
         if (memories != null) {
             try {
                 memories.flush();
-                if (mipEnabled) logMIP(MemoryIntegrationPatch.integrate(memories.directory()));
             } catch (IOException e) {
-                logMIP("Memory flush/integration failed: " + e.getMessage());
-                return say(src, "Could not save/integrate memories: " + e.getMessage());
+                logMIP("Memory flush failed: " + e.getMessage());
+                return say(src, "Could not save memories: " + e.getMessage());
             }
         }
         clearGhosts();
@@ -298,9 +316,74 @@ public class DoppelgangerMod implements ModInitializer {
 
     private static int mipStatus(ServerCommandSource src) {
         return say(src, "MIP " + (mipEnabled ? "ON" : "OFF")
+            + " | daily at " + formatMinecraftClock(mipScheduleTick)
+            + " (tick " + mipScheduleTick + ")"
             + " | recent log entries: " + mipLog.size()
             + " | integrated index: " + (memories != null
                 && Files.exists(memories.directory().resolve("nao_integrated_memory.md"))));
+    }
+
+    private static int parseMinecraftClock(String clock) {
+        if (!clock.matches("(?:[01]\\\\d|2[0-3]):[0-5]\\\\d"))
+            throw new IllegalArgumentException("Expected HH:mm from 00:00 to 23:59.");
+        int hour = Integer.parseInt(clock.substring(0, 2));
+        int minute = Integer.parseInt(clock.substring(3, 5));
+        // Minecraft tick 0 is 06:00; midnight (00:00) is tick 18000.
+        return ((hour * 1000 + minute * 1000 / 60) + 18000) % DAY_TICKS;
+    }
+
+    private static String formatMinecraftClock(int tick) {
+        int minutes = ((tick + 6000) % DAY_TICKS) * 1440 / DAY_TICKS;
+        return String.format(java.util.Locale.ROOT, "%02d:%02d", minutes / 60, minutes % 60);
+    }
+
+    private static int mipTimeStatus(ServerCommandSource src) {
+        return say(src, "MIP scheduled daily at " + formatMinecraftClock(mipScheduleTick)
+            + " (Minecraft tick " + mipScheduleTick + ").");
+    }
+
+    private static int mipTimeSet(ServerCommandSource src, String clock) {
+        final int newTick;
+        try { newTick = parseMinecraftClock(clock); }
+        catch (IllegalArgumentException ex) { return say(src, ex.getMessage()); }
+        try {
+            Path file = mipScheduleFile();
+            Files.createDirectories(file.getParent());
+            Files.writeString(file, clock, StandardCharsets.UTF_8);
+        } catch (IOException ex) {
+            return say(src, "Could not save MIP schedule: " + ex.getMessage());
+        }
+        mipScheduleTick = newTick;
+        scheduleInitialized = false;
+        logMIP("Daily integration time changed to " + clock + " (tick " + newTick + ")");
+        return say(src, "MIP now scheduled daily at " + clock + ".");
+    }
+
+    private static void tickMIP(MinecraftServer server) {
+        if (!mipEnabled || !recording || world == null || memories == null) return;
+        long current = world.getTimeOfDay();
+        if (!scheduleInitialized) {
+            lastObservedTime = current;
+            scheduleInitialized = true;
+            return;
+        }
+        long previous = lastObservedTime;
+        lastObservedTime = current;
+        // Ignore time jumps backwards (including the 24 training-loop rewinds).
+        // On large forward jumps, do not execute missed schedules in a burst.
+        if (current <= previous || current - previous > 20) return;
+        long dayIndex = Math.floorDiv(current, DAY_TICKS);
+        long target = dayIndex * DAY_TICKS + mipScheduleTick;
+        if (previous < target && current >= target && dayIndex != lastScheduledDay) {
+            lastScheduledDay = dayIndex;
+            try {
+                memories.flush();
+                logMIP("Daily " + formatMinecraftClock(mipScheduleTick) + ": "
+                    + MemoryIntegrationPatch.integrate(memories.directory()));
+            } catch (IOException ex) {
+                logMIP("Daily integration failed: " + ex.getMessage());
+            }
+        }
     }
 
     private static int mipToggle(ServerCommandSource src, boolean enabled) {
