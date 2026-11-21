@@ -25,6 +25,9 @@ public final class NaoLifeStore {
         public String lastOutcome = "NONE";
         /** Appearance identifier, not an authenticated Mojang profile or rendered skin. */
         public String skinKey = "nao/default";
+        /** Last confirmed NPC position, saved with the stable logical identity. */
+        public boolean hasPosition;
+        public double posX, posY, posZ;
         /** Per-individual action evidence; not a separate personality. */
         public Map<String, Integer> actionAttempts = new HashMap<>();
         public Map<String, Integer> actionSuccesses = new HashMap<>();
@@ -48,6 +51,8 @@ public final class NaoLifeStore {
                 if (n.goalAttempts == null) n.goalAttempts = new HashMap<>();
                 if (n.actionAttempts == null) n.actionAttempts = new HashMap<>();
                 if (n.actionSuccesses == null) n.actionSuccesses = new HashMap<>();
+                if (n.hasPosition && (!Double.isFinite(n.posX) || !Double.isFinite(n.posY) || !Double.isFinite(n.posZ)))
+                    throw new IOException("Invalid persisted Nao position");
                 if (n.skinKey == null || n.skinKey.isBlank()) n.skinKey = "nao/default";
                 try { new org.nagineco.doppel.appearance.NaoAppearanceRegistry.NaoAppearance(n.number, UUID.fromString(n.id), n.skinKey, true); }
                 catch (IllegalArgumentException ex) { throw new IOException("Invalid Nao appearance or UUID", ex); }
@@ -69,6 +74,11 @@ public final class NaoLifeStore {
         org.nagineco.doppel.appearance.NaoAppearanceRegistry registry = new org.nagineco.doppel.appearance.NaoAppearanceRegistry();
         for (Nao n : members) registry.ensure(n.number, UUID.fromString(n.id), n.skinKey);
         return registry;
+    }
+    public void rememberPosition(int index, double x, double y, double z) {
+        if (!Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(z)) return;
+        Nao n = get(index);
+        n.posX = x; n.posY = y; n.posZ = z; n.hasPosition = true;
     }
     public int count() { return members.size(); }
     public Nao get(int index) { return members.get(index); }
