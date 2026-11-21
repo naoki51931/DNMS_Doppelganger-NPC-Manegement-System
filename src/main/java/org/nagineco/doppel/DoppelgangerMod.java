@@ -64,6 +64,10 @@ public class DoppelgangerMod implements ModInitializer {
         life = new NaoLifeStore(lifeFile());
         life.load();
         for (int i = 0; i < count; i++) life.ensure(i);
+        // Validate stable logical UUIDs and appearance keys before publishing a checkpoint.
+        // Existing armor-stand stand-ins remain unchanged until rendering integration.
+        try { life.appearanceRegistry(); }
+        catch (RuntimeException ex) { throw new IOException("Invalid Nao appearance registry", ex); }
         life.save();
         sharedKnowledge = new SharedMemoryReader(memories.directory().resolve("nao_integrated_memory.md"));
         sharedKnowledge.refresh();
