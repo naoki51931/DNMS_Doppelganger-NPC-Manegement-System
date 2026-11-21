@@ -22,5 +22,6 @@ sourceSets {
         java.srcDir 'patches/automatic-movement/src'
         java.srcDir 'patches/reward-learning/src'
         java.srcDir 'patches/nao-growth/src'
+        java.srcDir 'patches/player-appearance/src'
     }
 }
