@@ -15,6 +15,11 @@ public final class NaoLifeStore {
         public Goal goal = Goal.EXPLORE;
         public int exploration, collection, building, social;
         public int energy = 100;
+        public long goalUntilTick;
+        public int blockedSteps;
+        public long decisions;
+        public String lastAction = "NONE";
+        public String lastOutcome = "NONE";
     }
     private static final Gson GSON = new Gson();
     private final Path file;
