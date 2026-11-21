@@ -583,6 +583,13 @@ public class DoppelgangerMod implements ModInitializer {
                 loadedMemories.restoreRewards(i, brain);
                 loadedBrains.add(brain);
             }
+            if (player == null) {
+                if (!snapshot.freePlay || loadedTracks.size() != CHARACTERS || playerState == null)
+                    throw new IOException("Unattended restoration requires completed 24-Nao free-play and saved owner dimension");
+                Identifier dimension = Identifier.tryParse(playerState.dimension);
+                if (dimension == null || server.getWorld(RegistryKey.of(RegistryKeys.WORLD, dimension)) == null)
+                    throw new IOException("Saved NPC dimension is unavailable: " + playerState.dimension);
+            }
             restoredPlayerState = playerState;
             memories = loadedMemories;
             initializeLife(loadedTracks.size());
