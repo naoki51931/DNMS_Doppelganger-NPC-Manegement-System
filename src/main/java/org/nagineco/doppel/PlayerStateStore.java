@@ -50,7 +50,8 @@ public final class PlayerStateStore {
             slot.index = i;
             slot.item = Registries.ITEM.getId(stack.getItem()).toString();
             slot.count = stack.getCount();
-            NbtCompound tag = stack.toNbt(player.getRegistryManager());
+            // Yarn 1.21.1 ItemStack serialization uses encode(RegistryWrapper.WrapperLookup).
+            NbtCompound tag = (NbtCompound) stack.encode(player.getRegistryManager());
             ByteArrayOutputStream bytes = new ByteArrayOutputStream();
             NbtIo.writeCompressed(tag, bytes);
             slot.stackNbt = Base64.getEncoder().encodeToString(bytes.toByteArray());
