@@ -333,3 +333,10 @@ When `/doppel life on` is active, an NPC with the COLLECT goal attempts to harve
 2. **Pathfinding to harvest targets**: navigate safely around obstacles to reach logs instead of relying only on nearby-target checks.
 
 These two features are **not implemented** and are deliberately deferred. Do not present them as working or silently add them to the current harvesting patch. The existing limited `NaoWorkPatch` can still remove exposed logs from buildings; use only backed-up test worlds until protection is implemented. Revisit protection first, then pathfinding, when the user requests the deferred work.
+
+
+### 後日実装（2026-11-21確定）
+- 建築物を壊さないための保護判定：天然の原木と建築用の原木の識別、保護区域・権限確認。**未実装、後日実装**。
+- 採集対象までの経路探索：障害物を避けて安全に対象へ移動する機能。**未実装、後日実装**。
+- 実装再開時は保護判定を先に、その後に経路探索を実装する。
+- 現在の採集パッチは建築物の原木も破壊し得るため、保護判定実装まではバックアップ済みテストワールドのみで使用する。
