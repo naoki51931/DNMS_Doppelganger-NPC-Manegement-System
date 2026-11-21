@@ -570,6 +570,29 @@ public class DoppelgangerMod implements ModInitializer {
             }
             ghost.refreshPositionAndAngles(pos.x, pos.y, pos.z, ghost.getYaw(), 0);
         }
+        if (lifeAiEnabled && life != null && ghosts.size() >= 2 && loopTick % 200 == 0) {
+            List<NaoLifeStore.Nao> participants = new ArrayList<>();
+            for (int i = 0; i < ghosts.size() && i < life.count(); i++)
+                if (!ghosts.get(i).isRemoved()) participants.add(life.get(i));
+            for (NaoLifeStore.Nao receiver : participants) {
+                if (!"BUILDER".equals(NaoCooperationPatch.role(receiver))) continue;
+                int receiverIndex = receiver.number - 1;
+                for (NaoLifeStore.Nao sender : participants) {
+                    int senderIndex = sender.number - 1;
+                    if (senderIndex >= ghosts.size() || receiverIndex >= ghosts.size()) continue;
+                    if (ghosts.get(senderIndex).getPos().squaredDistanceTo(
+                            ghosts.get(receiverIndex).getPos()) > 16) continue;
+                    if (NaoCooperationPatch.transfer(sender, receiver)) {
+                        report("Nao cooperation: " + sender.lastOutcome);
+                        if (memories != null) {
+                            memories.rememberEvent(senderIndex, day, loopTick, "npc_transfer", sender.lastOutcome);
+                            memories.rememberEvent(receiverIndex, day, loopTick, "npc_receive", receiver.lastOutcome);
+                        }
+                        break;
+                    }
+                }
+            }
+        }
         long serverTick = server.getTicks();
         if (serverTick - lastCheckpointTick >= 1200 || lastCheckpointTick == Long.MIN_VALUE) {
             try { saveSession(); lastCheckpointTick = serverTick; }
