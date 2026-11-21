@@ -143,9 +143,11 @@ public final class PersonalityMemoryStore {
         List<String> originals = new ArrayList<>();
         for (int i = 0; i < count; i++) {
             StringBuilder own = new StringBuilder();
+            boolean inShared = false;
             for (String line : Files.readAllLines(memoryPath(i), StandardCharsets.UTF_8)) {
-                if (line.equals("<!-- DNMS_SHARED_COPY_BEGIN -->")) break;
-                own.append(line).append("\n");
+                if (line.equals("<!-- DNMS_SHARED_COPY_BEGIN -->")) { inShared = true; continue; }
+                if (line.equals("<!-- DNMS_SHARED_COPY_END -->")) { inShared = false; continue; }
+                if (!inShared) own.append(line).append("\n");
             }
             originals.add(own.toString());
         }
