@@ -205,3 +205,7 @@ When `/doppel life on` is active, an NPC with the COLLECT goal attempts to harve
 - 採集対象までの経路探索：障害物を避けて安全に対象へ移動する機能。**未実装、後日実装**。
 - 実装再開時は保護判定を先に、その後に経路探索を実装する。
 - 現在の採集パッチは建築物の原木も破壊し得るため、保護判定実装まではバックアップ済みテストワールドのみで使用する。
+
+
+### Stage 7 cooperation baseline (2026-11-21)
+`NaoCooperationPatch.java` introduces per-Nao role decisions (`SCOUT`, `GATHER`, `BUILDER`, `REST`) using individual skill and a deterministic starter role. While life AI is enabled, every 200 ticks active stand-ins within 4 blocks may transfer **one log** from a GATHER Nao to a BUILDER Nao. Each participant retains its own inventory; both gain social skill; `npc_transfer` and `npc_receive` events are written to their individual memory journals for later MIP processing. Transfers are limited to 64 inventory units at the recipient and require a sender surplus. The shared plan label `STOCKPILE_LOGS` is conceptual only: no shared task board, autonomous delivery navigation, real building, protection or pathfinding has been implemented. The previously approved one-by-one growth, scheduled reset of the outer Nao and Minecraft time, and deferred structure protection/pathfinding are unchanged. **Not build-tested or run in-game.**
