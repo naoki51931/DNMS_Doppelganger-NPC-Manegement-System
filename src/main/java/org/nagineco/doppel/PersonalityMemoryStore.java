@@ -116,7 +116,7 @@ public final class PersonalityMemoryStore {
 
     public void restore(int index, HabitBrain brain) throws IOException {
         for (String line : Files.readAllLines(memoryPath(index), StandardCharsets.UTF_8)) {
-            if (!line.startsWith("- day=")) continue;
+            if (!line.startsWith("- day=") || !line.contains(" action=")) continue;
             String[] tokens = line.split(" ");
             try {
                 int tick = 0;
