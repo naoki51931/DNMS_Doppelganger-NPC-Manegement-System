@@ -1,4 +1,4 @@
-# AGENTS.md — Doppelganger NPC System
+# AGENTS.md — Doppel NPC Management System (DNMS)
 
 ## Repository architecture
 
