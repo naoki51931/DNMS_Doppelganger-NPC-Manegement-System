@@ -483,36 +483,40 @@ public class DoppelgangerMod implements ModInitializer {
             ArmorStandEntity ghost = ghosts.get(i);
             if (ghost.isRemoved() || i >= tracks.size()) continue;
             List<Vec3d> samples = tracks.get(i);
-            if (!samples.isEmpty()) {
-                Vec3d pos;
-                if (aiMode) {
-                    if (lifeAiEnabled && life != null && i < life.count() && memories != null) {
-                        NaoLifeStore.Nao nao = life.get(i);
-                        if (loopTick % 1200 == 0) {
-                            nao.goal = NaoLifeAI.chooseGoal(nao, sharedKnowledge, world.getTimeOfDay());
-                        }
-                        HabitBrain.Move move = NaoLifeAI.move(nao, brains, i, loopTick, memories, rewardLearning, sharedKnowledge, ghost.getPos());
-                        pos = HabitBrain.applyMove(ghost.getPos(), move);
-                        if (loopTick % 20 == 0) {
-                            NaoLifeAI.update(nao, move != HabitBrain.Move.STAY);
-                            if (nao.goal == NaoLifeStore.Goal.EXPLORE && move != HabitBrain.Move.STAY)
-                                life.learn(i, NaoLifeStore.Goal.EXPLORE);
-                        }
-                    } else {
-                    pos = memories == null ? brains.get(i).step(ghost.getPos(), loopTick)
-                        : HabitBrain.applyMove(ghost.getPos(),
-                            HabitBrain.sharedDecision(brains, i, loopTick, memories, rewardLearning));
-                    // Bound AI to a local demonstration area and avoid solid blocks.
-                    Vec3d origin = samples.get(0);
-                    if (pos.squaredDistanceTo(origin) > 32 * 32
-                            || !world.isAir(net.minecraft.util.math.BlockPos.ofFloored(pos))) {
-                        pos = ghost.getPos();
-                    }
-                } else {
-                    pos = samples.get(Math.min(loopTick, samples.size() - 1));
+            if (samples.isEmpty()) continue;
+            Vec3d previous = ghost.getPos();
+            Vec3d pos = previous;
+            if (!aiMode) {
+                pos = samples.get(Math.min(loopTick, samples.size() - 1));
+            } else if (lifeAiEnabled && life != null && i < life.count() && memories != null) {
+                NaoLifeStore.Nao nao = life.get(i);
+                long time = world.getTime();
+                if (loopTick % 20 == 0)
+                    NaoLifeAI.plan(nao, sharedKnowledge, world, previous, time);
+                HabitBrain.Move move = NaoLifeAI.move(nao, brains, i, loopTick,
+                    memories, rewardLearning, sharedKnowledge, previous);
+                Vec3d proposed = HabitBrain.applyMove(previous, move);
+                if (proposed.squaredDistanceTo(samples.get(0)) <= 32 * 32
+                        && world.isAir(BlockPos.ofFloored(proposed))
+                        && !NaoLifeAI.danger(world, proposed)) pos = proposed;
+                boolean moved = pos.squaredDistanceTo(previous) > 0.000001;
+                if (loopTick % 20 == 0) {
+                    NaoLifeAI.update(nao, moved);
+                    if (moved && nao.goal == NaoLifeStore.Goal.EXPLORE)
+                        life.learn(i, NaoLifeStore.Goal.EXPLORE);
+                    nao.blockedSteps = !moved && move != HabitBrain.Move.STAY
+                        ? Math.min(100, nao.blockedSteps + 1) : 0;
+                    nao.lastAction = move.name();
+                    nao.lastOutcome = moved ? "MOVED" : "WAITED_OR_BLOCKED";
                 }
-                ghost.refreshPositionAndAngles(pos.x, pos.y, pos.z, ghost.getYaw(), 0);
+            } else {
+                pos = memories == null ? brains.get(i).step(previous, loopTick)
+                    : HabitBrain.applyMove(previous,
+                        HabitBrain.sharedDecision(brains, i, loopTick, memories, rewardLearning));
+                if (pos.squaredDistanceTo(samples.get(0)) > 32 * 32
+                        || !world.isAir(BlockPos.ofFloored(pos))) pos = previous;
             }
+            ghost.refreshPositionAndAngles(pos.x, pos.y, pos.z, ghost.getYaw(), 0);
         }
         long serverTick = server.getTicks();
         if (serverTick - lastCheckpointTick >= 1200 || lastCheckpointTick == Long.MIN_VALUE) {
