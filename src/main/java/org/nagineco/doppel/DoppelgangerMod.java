@@ -28,6 +28,7 @@ import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.util.math.EulerAngle;
 import net.minecraft.world.GameMode;
 
 import java.util.ArrayList;
@@ -612,7 +613,27 @@ public class DoppelgangerMod implements ModInitializer {
                 if (pos.squaredDistanceTo(samples.get(0)) > 32 * 32
                         || !world.isAir(BlockPos.ofFloored(pos))) pos = previous;
             }
-            ghost.refreshPositionAndAngles(pos.x, pos.y, pos.z, ghost.getYaw(), 0);
+            // Vanilla stand-in animation: face travel direction and swing limbs.
+            // Keep the logical AI position authoritative; do not introduce new movement.
+            double dx = pos.x - previous.x;
+            double dz = pos.z - previous.z;
+            double horizontalDistanceSq = dx * dx + dz * dz;
+            float yaw = horizontalDistanceSq > 0.000001
+                ? (float) (Math.toDegrees(Math.atan2(dz, dx)) - 90.0)
+                : ghost.getYaw();
+            ghost.refreshPositionAndAngles(pos.x, pos.y, pos.z, yaw, 0);
+            if (horizontalDistanceSq > 0.000001) {
+                float swing = (float) Math.sin(loopTick * 0.35 + i * 0.7) * 24.0f;
+                ghost.setLeftLegRotation(new EulerAngle(swing, 0, 0));
+                ghost.setRightLegRotation(new EulerAngle(-swing, 0, 0));
+                ghost.setLeftArmRotation(new EulerAngle(-swing * 0.65f, 0, -5));
+                ghost.setRightArmRotation(new EulerAngle(swing * 0.65f, 0, 5));
+            } else {
+                ghost.setLeftLegRotation(new EulerAngle(0, 0, 0));
+                ghost.setRightLegRotation(new EulerAngle(0, 0, 0));
+                ghost.setLeftArmRotation(new EulerAngle(0, 0, -5));
+                ghost.setRightArmRotation(new EulerAngle(0, 0, 5));
+            }
         }
         if (lifeAiEnabled && life != null && ghosts.size() >= 2 && loopTick % 200 == 0) {
             List<NaoLifeStore.Nao> participants = new ArrayList<>();
