@@ -96,6 +96,15 @@ public final class PersonalityMemoryStore {
         eventCounts[index]++;
     }
 
+    /** Structured, automatically observed gameplay event; never an inferred emotion. */
+    public void rememberEvent(int index, int day, int tick, String type, String detail) {
+        if (index < 0 || index >= 24) return;
+        String safe = detail.replace('\n', ' ').replace('\r', ' ');
+        pending[index].add("- day=" + day + " tick=" + tick + " event=" + type
+            + " detail=" + safe + "\n");
+        eventCounts[index]++;
+    }
+
     public void flush() throws IOException {
         for (int i = 0; i < 24; i++) {
             if (pending[i].isEmpty()) continue;
