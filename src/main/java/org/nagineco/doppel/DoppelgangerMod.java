@@ -1171,14 +1171,15 @@ public class DoppelgangerMod implements ModInitializer {
     }
 
     private static void integrateTrainingMidnight() {
-        if (!mipEnabled || memories == null || lastIntegratedTrainingDay == day) return;
+        int integrationKey = freePlay ? 1000 + day : tracks.size();
+        if (!mipEnabled || memories == null || lastIntegratedTrainingDay == integrationKey) return;
         try {
             memories.flush();
             logMIP("Daily 00:00 (day " + day + "): "
                 + MemoryIntegrationPatch.integrate(memories.directory()));
             if (sharedKnowledge != null) sharedKnowledge.refresh();
-            writeAtomic(mipCompletedFile(), Integer.toString(day));
-            lastIntegratedTrainingDay = day;
+            writeAtomic(mipCompletedFile(), Integer.toString(integrationKey));
+            lastIntegratedTrainingDay = integrationKey;
         } catch (IOException ex) {
             logMIP("Daily integration failed, will retry: " + ex.getMessage());
         }
