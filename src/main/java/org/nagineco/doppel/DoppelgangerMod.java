@@ -99,6 +99,75 @@ public class DoppelgangerMod implements ModInitializer {
             + ", trust=" + r.trust() + ", affection=" + r.affection()
             + ", romanceOptIn=" + r.romanceOptIn());
     }
+    private static NaoRegionRollback regionSnapshot;
+    private static boolean regionRollbackEnabled;
+    private static final NaoControlSession controlSession = new NaoControlSession();
+    private static Vec3d ownerBeforeControl;
+
+    private static int regionOn(ServerCommandSource src, int radius) {
+        if (!isOwner(src) || !recording || world == null) return say(src, "Active owner session required.");
+        ServerPlayerEntity player = src.getServer().getPlayerManager().getPlayer(owner);
+        if (player == null) return say(src, "Owner offline.");
+        try {
+            regionSnapshot = NaoRegionRollback.capture(world, player.getBlockPos(), radius, 4);
+            regionRollbackEnabled = true;
+            return say(src, "Bounded block rollback enabled for " + regionSnapshot.size() + " blocks; no block entities.");
+        } catch (RuntimeException ex) { return say(src, "Region snapshot refused: " + ex.getMessage()); }
+    }
+    private static int regionOff(ServerCommandSource src) {
+        if (!isOwner(src)) return say(src, "Owner only.");
+        regionRollbackEnabled = false;
+        regionSnapshot = null;
+        return say(src, "Bounded block rollback disabled.");
+    }
+    private static int controlNao(ServerCommandSource src, int slot) {
+        if (!isOwner(src) || !freePlay || life == null || slot > life.count()
+                || slot > ghosts.size() || ghosts.get(slot - 1).isRemoved())
+            return say(src, "Free-play and a live NPC are required.");
+        ServerPlayerEntity player = src.getServer().getPlayerManager().getPlayer(owner);
+        if (player == null) return say(src, "Owner offline.");
+        if (controlSession.selection().mode() == NaoControlSession.Mode.OWNER)
+            ownerBeforeControl = player.getPos();
+        controlSession.select(slot, UUID.fromString(life.get(slot - 1).id));
+        selected = slot - 1;
+        Vec3d pos = ghosts.get(selected).getPos();
+        player.teleport(world, pos.x, pos.y, pos.z, player.getYaw(), player.getPitch());
+        return say(src, "Player-avatar control assigned to Nao " + slot + "; ghost AI paused.");
+    }
+    private static int controlRelease(ServerCommandSource src) {
+        if (!isOwner(src)) return say(src, "Owner only.");
+        controlSession.release();
+        ServerPlayerEntity player = src.getServer().getPlayerManager().getPlayer(owner);
+        if (player != null && world != null && ownerBeforeControl != null)
+            player.teleport(world, ownerBeforeControl.x, ownerBeforeControl.y,
+                ownerBeforeControl.z, player.getYaw(), player.getPitch());
+        ownerBeforeControl = null;
+        return say(src, "Owner control restored.");
+    }
+    private static int planStatus(ServerCommandSource src, int slot) {
+        if (life == null || slot > life.count()) return say(src, "Nao not initialized.");
+        var plan = NaoGoalPlanner.choose(life.get(slot - 1), sharedKnowledge);
+        return say(src, "Nao " + slot + " plan=" + plan.primary()
+            + " fallback=" + plan.fallback() + " evidence=" + plan.evidence());
+    }
+    private static int growthProposal(ServerCommandSource src, int slot) {
+        if (!isOwner(src) || life == null || slot > life.count()) return say(src, "Playable Nao owner required.");
+        var nao = life.get(slot - 1);
+        var growth = new NaoPersonalityGrowth();
+        for (var action : NaoActionLearning.Action.values()) {
+            int attempts = nao.actionAttempts.getOrDefault(action.name(), 0);
+            int successes = nao.actionSuccesses.getOrDefault(action.name(), 0);
+            for (int i = 0; i < Math.min(1000, attempts); i++)
+                growth.observe(action.name().toLowerCase(java.util.Locale.ROOT), i < successes);
+        }
+        var suggestions = growth.suggestions();
+        if (suggestions.isEmpty()) return say(src, "At least 10 attempts needed for a proposal.");
+        for (var proposal : suggestions)
+            src.sendFeedback(() -> Text.literal("[Doppel] Playable Nao proposal: "
+                + proposal.trait() + "=" + proposal.proposedStrength() + "/10 from "
+                + proposal.observations() + " observations. NOT applied."), false);
+        return suggestions.size();
+    }
     private static boolean mannequinAnimation = true;
     private static Path mannequinAnimationFile() {
         return FabricLoader.getInstance().getConfigDir().resolve("doppelganger/mannequin-animation.enabled");
@@ -480,6 +549,19 @@ public class DoppelgangerMod implements ModInitializer {
                     .then(literal("on").executes(c -> lifeToggle(c.getSource(), true)))
                     .then(literal("off").executes(c -> lifeToggle(c.getSource(), false)))
                     .then(literal("status").executes(c -> lifeStatus(c.getSource()))))
+                .then(literal("region")
+                    .then(literal("on").then(argument("radius", IntegerArgumentType.integer(1, 12))
+                        .executes(c -> regionOn(c.getSource(), IntegerArgumentType.getInteger(c, "radius")))))
+                    .then(literal("off").executes(c -> regionOff(c.getSource()))))
+                .then(literal("control")
+                    .then(literal("select").then(argument("slot", IntegerArgumentType.integer(1, 24))
+                        .executes(c -> controlNao(c.getSource(), IntegerArgumentType.getInteger(c, "slot")))))
+                    .then(literal("release").executes(c -> controlRelease(c.getSource()))))
+                .then(literal("plan").then(argument("slot", IntegerArgumentType.integer(1, 24))
+                    .executes(c -> planStatus(c.getSource(), IntegerArgumentType.getInteger(c, "slot")))))
+                .then(literal("growth").then(literal("propose")
+                    .then(argument("slot", IntegerArgumentType.integer(1, 24))
+                        .executes(c -> growthProposal(c.getSource(), IntegerArgumentType.getInteger(c, "slot"))))))
                 .then(literal("social")
                     .then(literal("talk")
                         .then(argument("from", IntegerArgumentType.integer(1, 24))
