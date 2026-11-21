@@ -15,10 +15,10 @@ import java.util.UUID;
  * The caller is responsible for storing snapshot() in a persistent checkpoint.
  */
 public final class NaoAppearanceRegistry {
-    public static final int MAX_NAO = 24;
+    public static final int MAX_NAO = 256;
     public record NaoAppearance(int slot, UUID logicalId, String skinKey, boolean active) {
         public NaoAppearance {
-            if (slot < 1 || slot > MAX_NAO) throw new IllegalArgumentException("slot must be 1..24");
+            if (slot < 1 || slot > MAX_NAO) throw new IllegalArgumentException("slot must be 1..256");
             Objects.requireNonNull(logicalId, "logicalId");
             Objects.requireNonNull(skinKey, "skinKey");
             if (!skinKey.matches("[a-zA-Z0-9_./:-]{1,128}") || skinKey.contains(".."))
