@@ -410,6 +410,14 @@ public class DoppelgangerMod implements ModInitializer {
     }
 
     @Override public void onInitialize() {
+        try {
+            Path setting = mannequinAnimationFile();
+            mannequinAnimation = !Files.exists(setting)
+                || !Files.readString(setting, StandardCharsets.UTF_8).trim().equalsIgnoreCase("off");
+        } catch (IOException ex) {
+            mannequinAnimation = true;
+            LOG.warning("Could not load mannequin animation setting: " + ex.getMessage());
+        }
         try { if (Files.exists(growthFile())) growthTick = NaoGrowthPatch.parseClock(Files.readString(growthFile(), StandardCharsets.UTF_8).trim()); }
         catch (IOException | IllegalArgumentException ex) { growthTick = 0; LOG.warning("Growth time reset to 06:00: " + ex.getMessage()); }
         try {
