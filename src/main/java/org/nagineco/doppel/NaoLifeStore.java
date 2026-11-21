@@ -18,6 +18,7 @@ public final class NaoLifeStore {
         public long goalUntilTick;
         public int blockedSteps;
         public long decisions;
+        public Map<String, Integer> inventory = new HashMap<>();
         public String lastAction = "NONE";
         public String lastOutcome = "NONE";
     }
@@ -35,6 +36,7 @@ public final class NaoLifeStore {
             for (Nao n : data) {
                 if (n == null || n.id == null || n.goal == null || n.number != members.size()+1
                     || !ids.add(n.id)) throw new IOException("Invalid or duplicated Nao identity");
+                if (n.inventory == null) n.inventory = new HashMap<>();
                 members.add(n);
             }
         } catch (RuntimeException ex) { throw new IOException("Malformed Nao identities", ex); }
