@@ -31,8 +31,8 @@ int main() {
     int activeCount = INITIAL_NAOS;
     int selected = 0;
     characters[selected].mode = Mode::Human;
-    std::cout << "24-character doppelganger simulator\n"
-              << "Commands: 1-24 switch, d/a move, w collect, t tick, q quit\n";
+    std::cout << "24-initial / 256-max doppelganger simulator\n"
+              << "Commands: 1-256 switch, add N, d/a move, w collect, t tick, q quit\n";
     while (true) {
         std::cout << "\nPlaying #" << characters[selected].id << " > ";
         std::string command;
@@ -47,7 +47,7 @@ int main() {
             }
         } else if (command == "d" || command == "a" || command == "w") {
             characters[selected].actHuman(command[0]);
-            for (int i=0;i<activeCount;++i) if (c.mode == Mode::NPC) c.actNPC();
+            for (int i=0;i<activeCount;++i) if (characters[i].mode == Mode::NPC) characters[i].actNPC();
         } else if (command == "add") {
             int n=0;
             if (!(std::cin >> n) || n<1 || n>COUNT-activeCount) {
@@ -63,7 +63,7 @@ int main() {
                 size_t pos = 0;
                 int n = std::stoi(command, &pos);
                 if (pos != command.size() || n < 1 || n > activeCount) {
-                    std::cout << "Choose a number from 1 to 24.\n";
+                    std::cout << "Choose an active Nao (1..256).\n";
                     continue;
                 }
                 characters[selected].mode = Mode::NPC;
