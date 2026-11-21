@@ -18,17 +18,17 @@ public final class PersonalityMemoryStore {
     private final Path directory;
     private final int[] preference = new int[HabitBrain.Reason.values().length];
     private final List<String>[] pending;
-    private final int[] eventCounts = new int[24];
+    private final int[] eventCounts = new int[256];
 
     @SuppressWarnings("unchecked")
     public PersonalityMemoryStore(Path directory) throws IOException {
         this.directory = directory;
         Files.createDirectories(directory);
-        pending = (List<String>[]) new List<?>[24];
-        for (int i = 0; i < 24; i++) pending[i] = new ArrayList<>();
+        pending = (List<String>[]) new List<?>[256];
+        for (int i = 0; i < 256; i++) pending[i] = new ArrayList<>();
         for (int i = 0; i < preference.length; i++) preference[i] = 3;
         loadPersonality();
-        for (int i = 0; i < 24; i++) {
+        for (int i = 0; i < 256; i++) {
             Path file = memoryPath(i);
             if (!Files.exists(file)) {
                 Files.writeString(file, "# Nao " + String.format(Locale.ROOT, "%02d", i + 1)
@@ -40,7 +40,7 @@ public final class PersonalityMemoryStore {
     }
 
     private Path memoryPath(int index) {
-        if (index < 0 || index >= 24) throw new IllegalArgumentException("Nao index");
+        if (index < 0 || index >= 256) throw new IllegalArgumentException("Nao index");
         return directory.resolve(String.format(Locale.ROOT, "nao_%02d.md", index + 1));
     }
 
@@ -76,7 +76,7 @@ public final class PersonalityMemoryStore {
 
     public void savePersonality() throws IOException {
         StringBuilder text = new StringBuilder("# Nao — shared personality\n\n"
-            + "All 24 Nao characters reference this single preference profile.\n"
+            + "All Nao characters reference this single preference profile.\n"
             + "Preference strength: 0 (avoid) to 10 (strongly prefer).\n"
             + "Values are player-authored; they are not inferred emotions.\n\n");
         for (HabitBrain.Reason r : HabitBrain.Reason.values())
@@ -87,7 +87,7 @@ public final class PersonalityMemoryStore {
     }
 
     public void remember(int index, int day, int tick, VecRecord event) {
-        if (index < 0 || index >= 24) return;
+        if (index < 0 || index >= 256) return;
         pending[index].add("- day=" + day + " tick=" + tick
             + " position=(" + event.x() + "," + event.y() + "," + event.z() + ")"
             + " action=" + event.action()
@@ -98,7 +98,7 @@ public final class PersonalityMemoryStore {
 
     /** Structured, automatically observed gameplay event; never an inferred emotion. */
     public void rememberEvent(int index, int day, int tick, String type, String detail) {
-        if (index < 0 || index >= 24) return;
+        if (index < 0 || index >= 256) return;
         String safe = detail.replace('\n', ' ').replace('\r', ' ');
         pending[index].add("- day=" + day + " tick=" + tick + " event=" + type
             + " detail=" + safe + "\n");
@@ -106,7 +106,7 @@ public final class PersonalityMemoryStore {
     }
 
     public void rememberReward(int index, int day, int tick, HabitBrain brain, double score) {
-        if (index < 0 || index >= 24 || brain.lastManualMove() == null || score == 0) return;
+        if (index < 0 || index >= 256 || brain.lastManualMove() == null || score == 0) return;
         pending[index].add("- day=" + day + " tick=" + tick
             + " reward_move=" + brain.lastManualMove()
             + " reward_emotion=" + brain.lastManualEmotion()
@@ -136,8 +136,46 @@ public final class PersonalityMemoryStore {
         }
     }
 
+    /** Copy every source episode into every other Nao journal, retaining source provenance. */
+    public void replicateAll(int activeCount) throws IOException {
+        flush();
+        int count = Math.min(256, Math.max(0, activeCount));
+        List<String> originals = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            StringBuilder own = new StringBuilder();
+            for (String line : Files.readAllLines(memoryPath(i), StandardCharsets.UTF_8)) {
+                if (line.equals("<!-- DNMS_SHARED_COPY_BEGIN -->")) break;
+                own.append(line).append("\n");
+            }
+            originals.add(own.toString());
+        }
+        for (int i = 0; i < count; i++) {
+            StringBuilder copy = new StringBuilder(originals.get(i));
+            copy.append("\n<!-- DNMS_SHARED_COPY_BEGIN -->\n## Shared full-memory copies\n");
+            for (int j = 0; j < count; j++) {
+                if (i == j) continue;
+                copy.append("### Source Nao ").append(j + 1).append("\n");
+                for (String line : originals.get(j).split("\n"))
+                    if (line.startsWith("- day="))
+                        copy.append("- shared_from_nao=").append(j + 1)
+                            .append(" ").append(line.substring(2)).append("\n");
+            }
+            copy.append("<!-- DNMS_SHARED_COPY_END -->\n");
+            Path target = memoryPath(i);
+            Path tmp = target.resolveSibling(target.getFileName() + ".replica.tmp");
+            try {
+                Files.writeString(tmp, copy.toString(), StandardCharsets.UTF_8);
+                try { Files.move(tmp, target, java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING); }
+                catch (java.nio.file.AtomicMoveNotSupportedException ex) {
+                    Files.move(tmp, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                }
+            } finally { Files.deleteIfExists(tmp); }
+        }
+    }
+
     public void flush() throws IOException {
-        for (int i = 0; i < 24; i++) {
+        for (int i = 0; i < 256; i++) {
             if (pending[i].isEmpty()) continue;
             Files.writeString(memoryPath(i), String.join("", pending[i]), StandardCharsets.UTF_8,
                 StandardOpenOption.CREATE, StandardOpenOption.APPEND);
