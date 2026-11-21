@@ -40,7 +40,7 @@ The recording window is at most 24,000 ticks (one standard Minecraft day) per ch
 - Emotions and reasons are player-supplied annotations, not detected mental states. The last supplied labels persist for the rest of that character's training and later AI behavior. The model does not independently infer changing emotions, nor does it guarantee perfect preference matching.
 - The current policy learns movement direction only. The reason label `build` does not teach actual building, and `collect` does not teach gathering.
 - The learned movement policy has no inventory, mining, building, social behavior or robust collision avoidance.
-- All 24 NPCs use **one shared personality profile** as an affinity weighting system, plus the combined evidence of all characters' demonstrations. Each character's own memory is weighted twice as heavily when selecting its action. This is a heuristic, not full psychological or semantic understanding.
+- All 24 NPCs use **one shared personality profile** as an affinity weighting system, plus the combined evidence of all characters' demonstrations. All 24 characters' experiences are weighted equally when selecting an action. This is a heuristic, not full psychological or semantic understanding.
 - `/doppel preference` is the player's explicit preference, not an automatically inferred psychological trait. Emotions and reasons are likewise explicitly labeled.
 - The Markdown files are a readable structured journal, **not** an LLM memory retrieval system. Only structured movement samples are parsed for decisions. Free-form notes are not yet interpreted.
 - Recorded movement observations are sampled every 20 ticks (approximately once per second); only samples flushed to disk are durable. The stand-ins are not real controllable player entities.
@@ -96,7 +96,7 @@ Example in-game training:
 /doppel reason explore
 ```
 
-Move around to teach Nao 01, then type `/doppel next` to flush her memory and move to Nao 02. Repeat through Nao 24. Each character's Markdown journal is separate, but their action policy references the same `nao_personality.md`. The decision score combines shared demonstrations, preference affinity and double weight for the current NPC's own experiences.
+Move around to teach Nao 01, then type `/doppel next` to flush her memory and move to Nao 02. Repeat through Nao 24. Each character's Markdown journal is separate, but their action policy references the same `nao_personality.md`. The decision score combines shared demonstrations, preference affinity and equal weight for all 24 Nao experiences.
 
 **Privacy:** journals contain recorded in-game positions and player-supplied emotional labels. Keep the server files private if you do not want to publish them.
 
@@ -222,3 +222,11 @@ The JSON snapshot does not include the entire Minecraft world, NPC entities, inv
 The separately organized `patches/reward-learning/` module attributes observed item gains (+item count) and health damage (-health points) to the **last manually observed movement** of the active playable Nao. It records signed reward entries in the corresponding individual `nao_XX.md` journal and reloads them with the movement model. This is temporal attribution, **not proof that the movement caused the outcome**. Item loss is neutral. When enabled, reward weights influence both NPC shared movement decisions and AMP choices; when disabled, signed event logging continues but reward weights do not affect decisions. AMP-generated movements are excluded from reward attribution.
 
 Commands (operator, playable owner): `/doppel reward on`, `/doppel reward off`, `/doppel reward status`. Default is **OFF**; the toggle is persisted in `config/doppelganger/reward-learning.enabled`. The shared `nao_personality.md` remains authoritative for the playable Nao and all 24 NPC Nao. This patch does not introduce independent personalities. Build/runtime verification is pending.
+
+## Selected persistence, schedule and shared learning policy (2026-11)
+
+- **Generation checkpoints:** each successful save writes `recordings.json`, `player.json`, the single shared `nao_personality.md`, and all 24 `nao_XX.md` files to a new `config/doppelganger/checkpoints/generation_*/` directory. A `COMPLETE` marker is written before the `CURRENT` pointer is atomically replaced. `/doppel resume` reads the committed generation; legacy `recordings.json` remains a fallback when no generation pointer exists. Interrupted unpublished generations are ignored. Previous generations are retained (no automatic pruning yet).
+- **Player state:** checkpoint includes the playable Nao's dimension identifier, exact position/rotation, health, XP level/total/progress, and basic inventory item IDs/counts. On `/doppel resume` these values replace the current player state. **Important limitation:** custom item components (enchantments, names, durability, contents, etc.) are not yet serialized and will be lost if such items are restored. Resume requires the player to already be in the saved dimension. Back up the world and inventory before testing. World blocks, entities, hunger, effects, and other player state are not restored.
+- **MIP remains Minecraft-time based:** the scheduled clock crossing (default midnight/tick 18000) is unchanged; it does not necessarily merge after each Nao loop.
+- **Equal experiences:** all 24 Nao journals have weight 1.0 in the shared movement decision; there is no special 2x boost for the current Nao. One authoritative `nao_personality.md` remains shared by playable Nao and all 24 NPCs.
+- Build and runtime testing are still pending; do not treat the player-state serializer as a complete lossless Minecraft backup.
