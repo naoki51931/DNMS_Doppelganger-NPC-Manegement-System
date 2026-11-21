@@ -444,7 +444,7 @@ public class DoppelgangerMod implements ModInitializer {
         return say(src, "Bounded block rollback disabled.");
     }
     private static int advanceFreePlayDay(ServerCommandSource src) {
-        if (!recording || !freePlay || tracks.size() != CHARACTERS || life == null
+        if (!recording || !freePlay || tracks.size() < CHARACTERS || life == null
                 || life.count() < CHARACTERS)
             return say(src, "All 24 Nao identities must be present before advancing free-play days.");
         if (!isOwner(src)) return say(src, "Only the playable Nao owner may advance the day.");
