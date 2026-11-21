@@ -31,6 +31,9 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.math.EulerAngle;
 import net.minecraft.world.GameMode;
+import net.minecraft.registry.RegistryKey;
+import net.minecraft.registry.RegistryKeys;
+import net.minecraft.util.Identifier;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -127,14 +130,22 @@ public class DoppelgangerMod implements ModInitializer {
             LOG.warning("Could not restore MIP completion marker: " + ex.getMessage());
         }
     }
+    private static long lastHeadlessResumeAttempt = Long.MIN_VALUE;
     private static void tryAutomaticResume(MinecraftServer server) {
         if (recording || server.getTicks() % 40 != 0 || !Files.isRegularFile(sessionOwnerFile())) return;
         try {
             UUID expected = UUID.fromString(Files.readString(sessionOwnerFile(), StandardCharsets.UTF_8).trim());
             ServerPlayerEntity player = server.getPlayerManager().getPlayer(expected);
-            if (player == null || !Files.isRegularFile(snapshotFile())) return;
-            // Resume requires the original owner online in the saved dimension.
-            resume(player.getCommandSource());
+            if (offlineNpcMode && lifeAiEnabled) {
+                // Do not require the owner to connect before resuming autonomous NPCs.
+                // Throttle failed attempts to avoid repeated file restores and log spam.
+                if (lastHeadlessResumeAttempt != Long.MIN_VALUE
+                        && server.getTicks() - lastHeadlessResumeAttempt < 1200) return;
+                lastHeadlessResumeAttempt = server.getTicks();
+                restoreSession(server, null, expected, false);
+            } else if (player != null) {
+                restoreSession(server, player, expected, true);
+            }
         } catch (IOException | IllegalArgumentException ex) {
             LOG.warning("Automatic DNMS resume deferred: " + ex.getMessage());
         }
@@ -525,10 +536,15 @@ public class DoppelgangerMod implements ModInitializer {
         }
     }
     private static int resume(ServerCommandSource src) {
-        if (recording) return say(src, "Stop the active session before resuming.");
+        if (recording) return say(src, "Session already active; select a playable Nao with /doppel control select <slot>.");
         ServerPlayerEntity player;
         try { player = src.getPlayerOrThrow(); }
         catch (Exception ex) { return say(src, "Run as an operator player."); }
+        return restoreSession(src.getServer(), player, player.getUuid(), true);
+    }
+    private static int restoreSession(MinecraftServer server, ServerPlayerEntity player,
+                                      UUID expectedOwner, boolean restoreOwnerSnapshot) {
+        if (recording) return 0;
         RecordingSnapshotStore.Snapshot snapshot;
         List<List<Vec3d>> loadedTracks;
         PersonalityMemoryStore loadedMemories;
@@ -542,9 +558,9 @@ public class DoppelgangerMod implements ModInitializer {
             PlayerStateStore.State playerState = generation == null ? null
                 : (Files.exists(generation.resolve("player.json"))
                     ? PlayerStateStore.load(generation.resolve("player.json")) : null);
-            if (playerState != null && !player.getServerWorld().getRegistryKey().getValue().toString()
+            if (restoreOwnerSnapshot && playerState != null && !player.getServerWorld().getRegistryKey().getValue().toString()
                     .equals(playerState.dimension))
-                return say(src, "Move to saved dimension before resuming: " + playerState.dimension);
+                return say(player.getCommandSource(), "Move to saved dimension before resuming: " + playerState.dimension);
             if (generation != null && Files.isRegularFile(generation.resolve("nao_lives.json"))) {
                 Files.createDirectories(lifeFile().getParent());
                 Files.copy(generation.resolve("nao_lives.json"), lifeFile(),
@@ -558,7 +574,7 @@ public class DoppelgangerMod implements ModInitializer {
             if (generation != null) GenerationCheckpointStore.restoreMemories(generation,
                 FabricLoader.getInstance().getGameDir().resolve("config/doppelganger/memories"));
             loadedTracks = RecordingSnapshotStore.restoreTracks(snapshot);
-            if (loadedTracks.isEmpty()) return say(src, "Snapshot has no recordings.");
+            if (loadedTracks.isEmpty()) { LOG.warning("DNMS checkpoint has no recordings"); return 0; }
             loadedMemories = new PersonalityMemoryStore(
                 FabricLoader.getInstance().getGameDir().resolve("config/doppelganger/memories"));
             for (int i = 0; i < loadedTracks.size(); i++) {
@@ -570,9 +586,10 @@ public class DoppelgangerMod implements ModInitializer {
             restoredPlayerState = playerState;
             memories = loadedMemories;
             initializeLife(loadedTracks.size());
-            if (restoredPlayerState != null) PlayerStateStore.restore(player, restoredPlayerState);
+            if (restoreOwnerSnapshot && restoredPlayerState != null) PlayerStateStore.restore(player, restoredPlayerState);
         } catch (IOException ex) {
-            return say(src, "Could not resume session: " + ex.getMessage());
+            LOG.warning("Could not resume DNMS session: " + ex.getMessage());
+            return player == null ? 0 : say(player.getCommandSource(), "Could not resume session: " + ex.getMessage());
         }
         clearGhosts();
         tracks.clear();
@@ -580,9 +597,22 @@ public class DoppelgangerMod implements ModInitializer {
         brains.clear();
         brains.addAll(loadedBrains);
         memories = loadedMemories;
-        owner = player.getUuid();
-        world = player.getServerWorld();
-        dawn = tracks.get(0).isEmpty() ? player.getBlockPos()
+        owner = expectedOwner;
+        if (player == null) {
+            if (restoredPlayerState == null) {
+                LOG.warning("Cannot restore unattended DNMS session without saved player dimension");
+                return 0;
+            }
+            Identifier dimension = Identifier.tryParse(restoredPlayerState.dimension);
+            world = dimension == null ? null : server.getWorld(RegistryKey.of(RegistryKeys.WORLD, dimension));
+            if (world == null) {
+                LOG.warning("Saved DNMS dimension unavailable: " + restoredPlayerState.dimension);
+                return 0;
+            }
+        } else world = player.getServerWorld();
+        dawn = tracks.get(0).isEmpty() ? (player == null
+            ? BlockPos.ofFloored(restoredPlayerState.x, restoredPlayerState.y, restoredPlayerState.z)
+            : player.getBlockPos())
             : net.minecraft.util.math.BlockPos.ofFloored(tracks.get(0).get(0));
         day = snapshot.day;
         selected = snapshot.selected;
@@ -593,8 +623,8 @@ public class DoppelgangerMod implements ModInitializer {
         loopTick = freePlay ? 0 : Math.min(DAY_TICKS - 1, tracks.get(tracks.size()-1).size());
         lastAutoTick = -1;
         lastCheckpointTick = Long.MIN_VALUE;
-        resetObservations(player);
-        if (!freePlay) {
+        if (player != null) resetObservations(player);
+        if (!freePlay && player != null) {
             List<Vec3d> active = tracks.get(tracks.size() - 1);
             if (!active.isEmpty() && restoredPlayerState == null) {
                 Vec3d last = active.get(active.size() - 1);
@@ -606,8 +636,12 @@ public class DoppelgangerMod implements ModInitializer {
         restoreMipCompletion();
         spawnGhosts();
         report("Resumed JSON snapshot with " + tracks.size() + " recorded Nao tracks.");
-        return say(src, "Resumed saved session: " + tracks.size() + "/24 tracks, day " + day
-            + ". Automatic movement remains OFF.");
+        if (player == null) {
+            LOG.info("DNMS unattended NPC simulation restored: " + tracks.size() + " identities, day " + day);
+            return 1;
+        }
+        return say(player.getCommandSource(), "Resumed saved session: " + tracks.size()
+            + "/24 tracks, day " + day + ". Automatic movement remains OFF.");
     }
     private static int lastAutoTick = -1;
     private static long lastCheckpointTick = Long.MIN_VALUE;
