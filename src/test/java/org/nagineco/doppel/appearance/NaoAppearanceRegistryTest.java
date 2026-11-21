@@ -28,7 +28,7 @@ class NaoAppearanceRegistryTest {
         assertThrows(IllegalArgumentException.class,
             () -> new NaoAppearanceRegistry.NaoAppearance(1, UUID.randomUUID(), "../invalid", true));
         assertThrows(IllegalArgumentException.class,
-            () -> new NaoAppearanceRegistry.NaoAppearance(25, UUID.randomUUID(), "nao/default", true));
+            () -> new NaoAppearanceRegistry.NaoAppearance(257, UUID.randomUUID(), "nao/default", true));
     }
 
     @Test void restoreIsAtomicOnDuplicate() {
