@@ -1,5 +1,16 @@
 # Player Appearance Patch (PAP) — phase 1
 
+<!-- DNMS_PATCH_BILINGUAL_CURRENT_BEGIN -->
+
+## 日本語ガイド（現行仕様）
+PAPは24人の奈央の見た目と識別情報を管理するパッチです。各奈央のUUIDと `skinKey` を `nao_lives.json` に保存します。`/doppel appearance status <slot>` で確認し、`/doppel appearance set <slot> <skinKey>` で設定できます。現在のNPCは防具立てにプレイヤーヘッドと革装備を付けた簡易マネキンで、腕・脚の簡易アニメーションがあります。**本物のプレイヤー型モデル、スキンのダウンロード・適用、完全なプレイヤーエンティティは未実装**です。UUIDは再生成のたびに変更しないこと。将来の描画方式はFabric 1.21.1で検証が必要です。
+
+## English Guide (Current Behavior)
+PAP manages identity and appearance metadata for up to 24 Naos. Stable UUIDs and `skinKey` values persist in `nao_lives.json`. Inspect with `/doppel appearance status <slot>` and change metadata with `/doppel appearance set <slot> <skinKey>`. Current NPCs are armor-stand mannequins wearing generic player heads and leather gear, with simple limb animation. **Actual humanoid player rendering, skin download/application and real player entities are not implemented.** Never regenerate logical UUIDs on respawn. Future rendering requires Fabric 1.21.1 compatibility testing.
+
+<!-- DNMS_PATCH_BILINGUAL_CURRENT_END -->
+
+
 ## Phase 4 vanilla visual preview (2026-11-21)
 
 `spawnGhosts()` now equips each existing armor-stand stand-in with a generic player-head item, leather chestplate, leggings and boots, and enables visible arms. This gives a basic human-like **mannequin preview** with no client mod. The saved `skinKey` is not yet applied to the head or to a player skin. This does not meet the requirement for 24 genuine player-shaped NPCs. Minecraft/Fabric build and runtime have not been verified.
