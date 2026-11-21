@@ -124,3 +124,20 @@ Commands (operator, playable owner): `/doppel reward on`, `/doppel reward off`, 
 8. **Minecraft-clock MIP schedule is not per-loop integration (intentional design).** Keep Minecraft-time scheduling as requested. Do not silently change it to run at each Nao loop; make the distinction explicit in status and docs.
 
 **Future fix acceptance criteria:** Java 21/Fabric 1.21.1 compilation; tests for corrupted/incomplete checkpoints, rollback after restore failures, old v1 and new v2 item stacks, enchanted/damaged/renamed/container items, and generation retention; test with a disposable Minecraft world first. Preserve **one authoritative `nao_personality.md`** for playable Nao and all 24 NPCs, equal weighting of all 24 experiences, optional reward learning default OFF, and Minecraft-time-based MIP scheduling.
+
+
+## Nao Autonomous Life AI — phased implementation (2026-11-21)
+
+**Current state: initial foundation committed, not a complete autonomous survival NPC; build and in-game tests pending.** The design follows the fictional Nao model: one shared personality and shared knowledge, but independent bodies, goals and learned physical skills.
+
+Implementation order and status:
+
+1. **Goal-based autonomous AI — foundation implemented.** `NaoLifeAI` chooses among EXPLORE, COLLECT, BUILD, REST, SOCIAL and SAFETY using shared MIP evidence, individual energy and skill context. Current stand-ins are armor stands and can only move or remain still; goal names do **not** imply actual mining, crafting, building, social interaction or survival.
+2. **MIP index referenced by AI — foundation implemented.** `SharedMemoryReader` reads `nao_integrated_memory.md` and counts validated indexed events by motivation. It is a lightweight heuristic, not semantic understanding; MIP's Minecraft-clock schedule is unchanged. The indexed events are **not** fed into HabitBrain again, avoiding double counting.
+3. **Shared memory loading — foundation implemented.** All Nao may consult the same derived MIP knowledge, while each `nao_XX.md` remains independent and `nao_personality.md` remains the single authoritative personality. Knowledge access is equal; individual current circumstances and skill levels can still differ.
+4. **Individual context and goals — foundation implemented.** `NaoLifeStore` keeps per-Nao energy, current goal and skill counters. The optional `/doppel life on|off|status` controls the experimental movement/goal layer; **OFF by default**. This is separate from optional reward learning, also OFF by default.
+5. **Gradual NPC creation — existing training-loop progression integrated.** One persistent Nao identity is created per recorded training loop, up to 24; earlier Nao stand-ins spawn as training advances. A configurable fictional population-growth schedule (2→4→6→10→16→20→24) is **not** yet implemented.
+6. **Individual skill learning — partial.** Exploration can increment from observed stand-in movement; collecting/building/social skills are represented but deliberately **not** increased merely for choosing a goal. Actual activity sensors, world interactions and skill training are future work.
+7. **Permanent individual IDs — implemented at application data level.** `config/doppelganger/nao_lives.json` stores UUIDs, goals, energy and skill counters. It is included in generation checkpoints. The armor stand entity UUID itself is not persisted and stand-ins are still recreated; stable NPC entity identity requires a future entity implementation.
+
+**Known limitations / deferred work:** NPCs remain armor stands, not full player-like autonomous entities; no real block-breaking, block placement, pathfinding, inventories or social actions. NPC world positions are not durably saved independently. Goals currently share a simple movement policy, and a shared MIP index is a derived knowledge summary, not a complete synchronized subjective memory. The existing checkpoint/resume atomicity defects and player-state restoration risks documented above remain unresolved. Do not claim the mod is tested or production-ready. Preserve all 24 Nao experience weights equally and do not create per-Nao personality files.
