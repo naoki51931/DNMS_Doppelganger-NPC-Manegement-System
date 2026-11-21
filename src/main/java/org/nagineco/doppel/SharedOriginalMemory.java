@@ -55,12 +55,45 @@ public final class SharedOriginalMemory {
         index.setProperty("version", "3");
         index.setProperty("active", Integer.toString(activeCount));
         Map<String, List<Hit>> inverted = new TreeMap<>();
+        Properties previous = new Properties();
+        Path previousState = dir.resolve(INDEX);
+        Path previousKeywords = dir.resolve(KEYWORDS);
+        boolean incremental = Files.isRegularFile(previousState) && Files.isRegularFile(previousKeywords);
+        if (incremental) {
+            try (InputStream in = Files.newInputStream(previousState)) { previous.load(in); }
+            incremental = "3".equals(previous.getProperty("version"))
+                && Integer.toString(activeCount).equals(previous.getProperty("active"));
+            for (int slot = 1; incremental && slot <= activeCount; slot++) {
+                Path path = journal(dir, slot);
+                long previousLength = Long.parseLong(previous.getProperty("bytes." + slot, "-1"));
+                incremental = Files.isRegularFile(path) && previousLength >= 0
+                    && Files.size(path) >= previousLength;
+            }
+        }
+        if (incremental) {
+            try (BufferedReader reader = Files.newBufferedReader(previousKeywords, StandardCharsets.UTF_8)) {
+                String row;
+                while ((row = reader.readLine()) != null) {
+                    String[] fields = row.split("\\t");
+                    if (fields.length < 2) continue;
+                    String word = new String(Base64.getUrlDecoder().decode(fields[0]), StandardCharsets.UTF_8);
+                    List<Hit> hits = inverted.computeIfAbsent(word, ignored -> new ArrayList<>());
+                    for (int i = 1; i < fields.length; i++) {
+                        String[] parts = fields[i].split(":", 2);
+                        if (parts.length == 2) hits.add(new Hit(Integer.parseInt(parts[0]), Long.parseLong(parts[1])));
+                    }
+                }
+            } catch (IllegalArgumentException ex) {
+                throw new IOException("Invalid prior keyword index", ex);
+            }
+        }
         for (int slot = 1; slot <= activeCount; slot++) {
             Path path = journal(dir, slot);
             if (!Files.isRegularFile(path)) throw new IOException("Missing original journal: " + path);
-            long count = 0;
+            long count = incremental ? Long.parseLong(previous.getProperty("nao." + slot, "0")) : 0;
             boolean copied = false;
             try (RandomAccessFile file = new RandomAccessFile(path.toFile(), "r")) {
+                if (incremental) file.seek(Long.parseLong(previous.getProperty("bytes." + slot)));
                 while (true) {
                     long offset = file.getFilePointer();
                     String raw = file.readLine();
@@ -74,6 +107,7 @@ public final class SharedOriginalMemory {
                     for (String word : words(line))
                         inverted.computeIfAbsent(word, ignored -> new ArrayList<>()).add(new Hit(slot, offset));
                 }
+                index.setProperty("bytes." + slot, Long.toString(file.length()));
             }
             index.setProperty("nao." + slot, Long.toString(count));
         }
