@@ -112,7 +112,7 @@ public final class PersonalityMemoryStore {
             + " reward_emotion=" + brain.lastManualEmotion()
             + " reward_reason=" + brain.lastManualReason()
             + " reward_part=" + brain.lastManualDayPart()
-            + " reward_score=" + score + "\\n");
+            + " reward_score=" + score + "\n");
     }
 
     public void restoreRewards(int index, HabitBrain brain) throws IOException {
