@@ -50,6 +50,32 @@ public class DoppelgangerMod implements ModInitializer {
     private static final List<HabitBrain> brains = new ArrayList<>();
     private static boolean aiMode = true;
     private static PersonalityMemoryStore memories;
+    private static NaoLifeStore life;
+    private static SharedMemoryReader sharedKnowledge;
+    private static boolean lifeAiEnabled = false;
+    private static Path lifeFile() {
+        return FabricLoader.getInstance().getConfigDir().resolve("doppelganger/nao_lives.json");
+    }
+    private static Path lifeSettingFile() {
+        return FabricLoader.getInstance().getConfigDir().resolve("doppelganger/life-ai.enabled");
+    }
+    private static void initializeLife(int count) throws IOException {
+        life = new NaoLifeStore(lifeFile());
+        life.load();
+        for (int i = 0; i < count; i++) life.ensure(i);
+        life.save();
+        sharedKnowledge = new SharedMemoryReader(memories.directory().resolve("nao_integrated_memory.md"));
+        sharedKnowledge.refresh();
+    }
+    private static int lifeToggle(ServerCommandSource src, boolean enabled) {
+        if (!isOwner(src)) return say(src, "Only playable Nao can change life AI.");
+        try {
+            Files.createDirectories(lifeSettingFile().getParent());
+            Files.writeString(lifeSettingFile(), enabled ? "on" : "off", StandardCharsets.UTF_8);
+            lifeAiEnabled = enabled;
+            return say(src, "Nao life AI " + (enabled ? "ON" : "OFF"));
+        } catch (IOException ex) { return say(src, "Life AI setting failed: " + ex.getMessage()); }
+    }
     private static final Logger LOG = Logger.getLogger("Doppelganger.MIP");
     private static final Deque<String> mipLog = new ArrayDeque<>();
     private static boolean mipEnabled = true;
@@ -101,6 +127,7 @@ public class DoppelgangerMod implements ModInitializer {
             throw new IOException("Playable Nao must be online in the recording dimension to checkpoint");
         Path playerFile = playerSnapshotFile();
         PlayerStateStore.save(playerFile, player);
+        if (life != null) life.save();
         GenerationCheckpointStore.publish(checkpointRoot(), snapshotFile(),
             memories.directory(), playerFile);
     }
@@ -148,6 +175,8 @@ public class DoppelgangerMod implements ModInitializer {
                 loadedBrains.add(brain);
             }
             restoredPlayerState = playerState;
+            memories = loadedMemories;
+            initializeLife(loadedTracks.size());
             if (restoredPlayerState != null) PlayerStateStore.restore(player, restoredPlayerState);
         } catch (IOException ex) {
             return say(src, "Could not resume session: " + ex.getMessage());
@@ -254,6 +283,10 @@ public class DoppelgangerMod implements ModInitializer {
     private static int rewardToggle(ServerCommandSource src, boolean enabled) {
         if (!isOwner(src)) return say(src, "Only the playable Nao can change reward learning.");
         try {
+            Path file = lifeSettingFile();
+            lifeAiEnabled = Files.exists(file) && Files.readString(file, StandardCharsets.UTF_8).trim().equalsIgnoreCase("on");
+        } catch (IOException ex) { lifeAiEnabled = false; }
+        try {
             Path file = rewardSettingFile();
             Files.createDirectories(file.getParent());
             Files.writeString(file, enabled ? "on" : "off", StandardCharsets.UTF_8);
@@ -268,6 +301,13 @@ public class DoppelgangerMod implements ModInitializer {
         if (reports.isEmpty()) return say(src, "No DNMS reports yet.");
         for (String entry : reports) src.sendFeedback(() -> Text.literal(entry), false);
         return 1;
+    }
+    private static int lifeStatus(ServerCommandSource src) {
+        if (life == null) return say(src, "Life AI " + (lifeAiEnabled ? "ON" : "OFF") + " | no session");
+        return say(src, "Life AI " + (lifeAiEnabled ? "ON" : "OFF")
+            + " | persistent identities " + life.count()
+            + " | shared MIP memories " + (sharedKnowledge == null ? 0 : sharedKnowledge.entries())
+            + " | spawned stand-ins " + ghosts.size());
     }
     private static int npcReport(ServerCommandSource src) {
         for (int i = 0; i < ghosts.size(); i++) {
@@ -306,6 +346,10 @@ public class DoppelgangerMod implements ModInitializer {
                 .requires(s -> s.hasPermissionLevel(2))
                 .then(literal("start").executes(c -> start(c.getSource())))
                 .then(literal("save").executes(c -> saveCommand(c.getSource())))
+                .then(literal("life")
+                    .then(literal("on").executes(c -> lifeToggle(c.getSource(), true)))
+                    .then(literal("off").executes(c -> lifeToggle(c.getSource(), false)))
+                    .then(literal("status").executes(c -> lifeStatus(c.getSource()))))
                 .then(literal("reward")
                     .then(literal("on").executes(c -> rewardToggle(c.getSource(), true)))
                     .then(literal("off").executes(c -> rewardToggle(c.getSource(), false)))
@@ -379,6 +423,8 @@ public class DoppelgangerMod implements ModInitializer {
         try { memories.restore(0, first); memories.restoreRewards(0, first); }
         catch (IOException e) { return say(src, "Could not read Nao 01 memory: " + e.getMessage()); }
         brains.add(first);
+        try { initializeLife(1); }
+        catch (IOException e) { recording = false; return say(src, "Life identity load failed: " + e.getMessage()); }
         world.setTimeOfDay(0);
         resetObservations(player);
         lastCheckpointTick = Long.MIN_VALUE;
@@ -424,6 +470,10 @@ public class DoppelgangerMod implements ModInitializer {
                 world.setTimeOfDay(current.size());
             }
         }
+        if (lifeAiEnabled && sharedKnowledge != null && loopTick % 200 == 0) {
+            try { sharedKnowledge.refresh(); }
+            catch (IOException ex) { report("Shared memory read failed: " + ex.getMessage()); }
+        }
         for (int i = 0; i < ghosts.size(); i++) {
             ArmorStandEntity ghost = ghosts.get(i);
             if (ghost.isRemoved() || i >= tracks.size()) continue;
@@ -431,6 +481,16 @@ public class DoppelgangerMod implements ModInitializer {
             if (!samples.isEmpty()) {
                 Vec3d pos;
                 if (aiMode) {
+                    if (lifeAiEnabled && life != null && i < life.count() && memories != null) {
+                        NaoLifeStore.Nao nao = life.get(i);
+                        if (loopTick % 1200 == 0) {
+                            nao.goal = NaoLifeAI.chooseGoal(nao, sharedKnowledge, world.getTimeOfDay());
+                            life.learn(i, nao.goal);
+                        }
+                        HabitBrain.Move move = NaoLifeAI.move(nao, brains, i, loopTick, memories, rewardLearning);
+                        pos = HabitBrain.applyMove(ghost.getPos(), move);
+                        if (loopTick % 20 == 0) NaoLifeAI.update(nao, move != HabitBrain.Move.STAY);
+                    } else {
                     pos = memories == null ? brains.get(i).step(ghost.getPos(), loopTick)
                         : HabitBrain.applyMove(ghost.getPos(),
                             HabitBrain.sharedDecision(brains, i, loopTick, memories, rewardLearning));
