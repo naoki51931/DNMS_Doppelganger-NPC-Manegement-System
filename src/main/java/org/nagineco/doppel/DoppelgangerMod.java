@@ -6,6 +6,7 @@ import net.fabricmc.api.ModInitializer;
 import net.fabricmc.loader.api.FabricLoader;
 import org.nagineco.patch.memoryintegration.MemoryIntegrationPatch;
 import org.nagineco.patch.automovement.AutomaticMovementPatch;
+import org.nagineco.patch.rewardlearning.RewardLearningPatch;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
@@ -77,6 +78,10 @@ public class DoppelgangerMod implements ModInitializer {
     private static boolean recording = false;
     private static boolean freePlay = false;
     private static boolean playableAutoMove = false;
+    private static boolean rewardLearning = false;
+    private static Path rewardSettingFile() {
+        return FabricLoader.getInstance().getConfigDir().resolve("doppelganger/reward-learning.enabled");
+    }
     private static Path snapshotFile() {
         return FabricLoader.getInstance().getGameDir().resolve("config/doppelganger/recordings.json");
     }
@@ -113,6 +118,7 @@ public class DoppelgangerMod implements ModInitializer {
             for (int i = 0; i < loadedTracks.size(); i++) {
                 HabitBrain brain = new HabitBrain();
                 loadedMemories.restore(i, brain);
+                loadedMemories.restoreRewards(i, brain);
                 loadedBrains.add(brain);
             }
         } catch (IOException ex) {
@@ -188,6 +194,7 @@ public class DoppelgangerMod implements ModInitializer {
         int index = freePlay ? selected : tracks.size() - 1;
         float health = player.getHealth();
         if (!Float.isNaN(healthBaseline) && health < healthBaseline) {
+            if (rewardLearning && !playableAutoMove) applyReward(index, health - healthBaseline);
             memories.rememberEvent(index, day, loopTick, "damage", "score=" + (health - healthBaseline) + " health=" + health);
             report("Playable Nao took damage: " + healthBaseline + " -> " + health);
         }
@@ -196,6 +203,7 @@ public class DoppelgangerMod implements ModInitializer {
         for (Map.Entry<String,Integer> e : now.entrySet()) {
             int delta = e.getValue() - inventoryBaseline.getOrDefault(e.getKey(), 0);
             if (delta > 0) {
+                if (rewardLearning && !playableAutoMove) applyReward(index, delta);
                 memories.rememberEvent(index, day, loopTick, "item_gain", "score=+" + delta + " item=" + e.getKey());
                 report("Playable Nao obtained " + e.getKey() + " x" + delta);
             }
@@ -207,6 +215,27 @@ public class DoppelgangerMod implements ModInitializer {
         inventoryBaseline.clear();
         inventoryBaseline.putAll(now);
     }
+    private static void applyReward(int index, double score) {
+        if (index < 0 || index >= brains.size()) return;
+        HabitBrain brain = brains.get(index);
+        if (brain.lastManualMove() == null) return;
+        memories.rememberReward(index, day, loopTick, brain, score);
+        RewardLearningPatch.apply(brain, loopTick, score);
+    }
+
+    private static int rewardToggle(ServerCommandSource src, boolean enabled) {
+        if (!isOwner(src)) return say(src, "Only the playable Nao can change reward learning.");
+        try {
+            Path file = rewardSettingFile();
+            Files.createDirectories(file.getParent());
+            Files.writeString(file, enabled ? "on" : "off", StandardCharsets.UTF_8);
+            rewardLearning = enabled;
+            return say(src, "Reward learning " + (enabled ? "ON" : "OFF") + " (saved).");
+        } catch (IOException ex) {
+            return say(src, "Could not save reward learning setting: " + ex.getMessage());
+        }
+    }
+
     private static int showReports(ServerCommandSource src) {
         if (reports.isEmpty()) return say(src, "No DNMS reports yet.");
         for (String entry : reports) src.sendFeedback(() -> Text.literal(entry), false);
@@ -222,6 +251,10 @@ public class DoppelgangerMod implements ModInitializer {
     }
 
     @Override public void onInitialize() {
+        try {
+            Path file = rewardSettingFile();
+            rewardLearning = Files.exists(file) && Files.readString(file, StandardCharsets.UTF_8).trim().equalsIgnoreCase("on");
+        } catch (IOException ex) { rewardLearning = false; }
         try {
             Path setting = mipSettingFile();
             if (Files.exists(setting))
@@ -245,6 +278,10 @@ public class DoppelgangerMod implements ModInitializer {
                 .requires(s -> s.hasPermissionLevel(2))
                 .then(literal("start").executes(c -> start(c.getSource())))
                 .then(literal("save").executes(c -> saveCommand(c.getSource())))
+                .then(literal("reward")
+                    .then(literal("on").executes(c -> rewardToggle(c.getSource(), true)))
+                    .then(literal("off").executes(c -> rewardToggle(c.getSource(), false)))
+                    .then(literal("status").executes(c -> say(c.getSource(), "Reward learning " + (rewardLearning ? "ON" : "OFF")))))
                 .then(literal("resume").executes(c -> resume(c.getSource())))
                 .then(literal("next").executes(c -> next(c.getSource())))
                 .then(literal("status").executes(c -> status(c.getSource())))
@@ -311,7 +348,7 @@ public class DoppelgangerMod implements ModInitializer {
         recording = true;
         tracks.add(new ArrayList<>());
         HabitBrain first = new HabitBrain();
-        try { memories.restore(0, first); }
+        try { memories.restore(0, first); memories.restoreRewards(0, first); }
         catch (IOException e) { return say(src, "Could not read Nao 01 memory: " + e.getMessage()); }
         brains.add(first);
         world.setTimeOfDay(0);
@@ -368,7 +405,7 @@ public class DoppelgangerMod implements ModInitializer {
                 if (aiMode) {
                     pos = memories == null ? brains.get(i).step(ghost.getPos(), loopTick)
                         : HabitBrain.applyMove(ghost.getPos(),
-                            HabitBrain.sharedDecision(brains, i, loopTick, memories));
+                            HabitBrain.sharedDecision(brains, i, loopTick, memories, rewardLearning));
                     // Bound AI to a local demonstration area and avoid solid blocks.
                     Vec3d origin = samples.get(0);
                     if (pos.squaredDistanceTo(origin) > 32 * 32
@@ -422,7 +459,7 @@ public class DoppelgangerMod implements ModInitializer {
         }
         tracks.add(new ArrayList<>());
         HabitBrain newBrain = new HabitBrain();
-        try { memories.restore(tracks.size() - 1, newBrain); }
+        try { memories.restore(tracks.size() - 1, newBrain); memories.restoreRewards(tracks.size() - 1, newBrain); }
         catch (IOException e) {
             tracks.remove(tracks.size() - 1);
             return say(src, "Failed to load next Nao memory: " + e.getMessage());
