@@ -50,3 +50,13 @@ Flush individual journals before integration. Manual `/doppel mip run` remains
 available. `/doppel next` and `/doppel stop` flush but do not merge on their
 own. Note that the prototype rewinds the Minecraft clock repeatedly and
 therefore a single Minecraft day ID may cover multiple training loops.
+
+## Playable Nao automatic observations and NPC reports
+
+The playable Nao is the primary demonstration source. During an active session, DNMS automatically samples inventory changes and health changes every 20 ticks (about one second), alongside existing movement observations. Positive inventory changes are recorded as `item_gain`, decreases as `item_loss`, and health reductions as `damage` in the currently associated Nao's individual Markdown journal. These are observed changes, **not proof of mining, crafting, combat, or the reason for a change**. The system does not infer emotions or motivations from these events.
+
+- `/doppel logs` — view up to 100 recent in-game report entries, including observed item gains and damage.
+- `/doppel npc report` — request each active stand-in NPC's position and movement sample count; results are also added to the report log.
+- `/doppel mip logs` — separate MIP integration diagnostics.
+
+Reports are delivered as operator command feedback and server console messages. They are **not yet unsolicited NPC messages**. The report ring buffer resets on server restart and on `/doppel start`; individual Markdown observations persist when flushed. Inventory and health sampling is best-effort: changes that cancel out between samples can be missed. NPCs still cannot mine, build, converse, or learn new gameplay actions from these journal event types. Integrated Markdown memory is not yet fed back into live NPC decisions.
