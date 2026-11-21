@@ -16,6 +16,7 @@ public final class GenerationCheckpointStore {
     private static String[] makeMemoryFiles() {
         List<String> names = new ArrayList<>();
         names.add("nao_personality.md");
+        names.add("shared_memory_index.properties");
         for (int i = 1; i <= 256; i++) names.add(String.format(java.util.Locale.ROOT, "nao_%02d.md", i));
         return names.toArray(new String[0]);
     }
