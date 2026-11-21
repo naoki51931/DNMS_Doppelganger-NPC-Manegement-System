@@ -525,15 +525,8 @@ public class DoppelgangerMod implements ModInitializer {
         } catch (IOException ex) {
             logMIP("Could not load enabled setting; using default ON: " + ex.getMessage());
         }
-        try {
-            Path setting = mipScheduleFile();
-            if (Files.exists(setting))
-                mipScheduleTick = parseMinecraftClock(
-                    Files.readString(setting, StandardCharsets.UTF_8).trim());
-        } catch (IOException | IllegalArgumentException ex) {
-            logMIP("Could not load MIP schedule; using 00:00: " + ex.getMessage());
-            mipScheduleTick = 18000;
-        }
+        // Ignore any older custom schedule: memory integration is fixed at 00:00.
+        mipScheduleTick = 18000;
         logMIP("Initialized; enabled=" + mipEnabled + "; daily time="
             + formatMinecraftClock(mipScheduleTick) + ". Use /doppel mip status|on|off|run|logs|time.");
         CommandRegistrationCallback.EVENT.register((dispatcher, registry, environment) ->
@@ -994,20 +987,18 @@ public class DoppelgangerMod implements ModInitializer {
     }
 
     private static int mipTimeSet(ServerCommandSource src, String clock) {
-        final int newTick;
-        try { newTick = parseMinecraftClock(clock); }
-        catch (IllegalArgumentException ex) { return say(src, ex.getMessage()); }
+        if (!"00:00".equals(clock))
+            return say(src, "MIP is fixed to Minecraft 00:00; other schedules are disabled.");
+        mipScheduleTick = 18000;
+        scheduleInitialized = false;
         try {
             Path file = mipScheduleFile();
             Files.createDirectories(file.getParent());
-            Files.writeString(file, clock, StandardCharsets.UTF_8);
+            Files.writeString(file, "00:00", StandardCharsets.UTF_8);
         } catch (IOException ex) {
-            return say(src, "Could not save MIP schedule: " + ex.getMessage());
+            return say(src, "Could not save midnight setting: " + ex.getMessage());
         }
-        mipScheduleTick = newTick;
-        scheduleInitialized = false;
-        logMIP("Daily integration time changed to " + clock + " (tick " + newTick + ")");
-        return say(src, "MIP now scheduled daily at " + clock + ".");
+        return say(src, "MIP runs at Minecraft 00:00.");
     }
 
     private static void tickMIP(MinecraftServer server) {
