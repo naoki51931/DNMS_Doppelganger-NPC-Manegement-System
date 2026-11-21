@@ -102,3 +102,34 @@ enabled by default; the last 20 integration messages are available via
 not continuously on every Minecraft tick.
 
 The live NPC AI still does not consume the integrated Markdown index.
+
+
+## Daily Minecraft-time schedule
+
+MIP now automatically integrates **once per in-game day at 00:00 (midnight)** by
+default, provided the Doppel system has been started and MIP is ON. In Minecraft
+Java, midnight is **tick 18000**; tick 0 is **06:00**, not midnight.
+
+Set a different time (24-hour Minecraft clock):
+
+```mcfunction
+/doppel mip time
+/doppel mip time 00:00
+/doppel mip time 12:30
+/doppel mip status
+/doppel mip logs
+```
+
+The schedule is saved in `config/doppelganger/mip.time` and survives restarts.
+Automatic integration flushes pending individual memory samples first and logs
+the outcome to the server console and `/doppel mip logs`.
+
+**Scheduling semantics:** it triggers on normal forward crossings of the
+configured clock time; it does not replay missed triggers after large time
+jumps. It runs at most once per underlying Minecraft day number. Rewinding the
+clock for the 24 training loops does not trigger the same day again. With the
+existing prototype's repeated clock resets, this means the daily merge may
+happen once across multiple training loops, not once for each loop. Use
+`/doppel mip run` for an immediate merge. Turning MIP OFF suppresses
+scheduled merges without deleting memories. `/doppel next` and
+`/doppel stop` now flush journals but do not themselves schedule a merge.
