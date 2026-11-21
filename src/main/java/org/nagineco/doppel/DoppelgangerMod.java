@@ -78,6 +78,7 @@ public class DoppelgangerMod implements ModInitializer {
     private static boolean freePlay = false;
     private static boolean playableAutoMove = false;
     private static int lastAutoTick = -1;
+    private static boolean lastTickWasAutomatic = false;
 
 
     private static final Deque<String> reports = new ArrayDeque<>();
@@ -103,6 +104,7 @@ public class DoppelgangerMod implements ModInitializer {
         inventoryBaseline.putAll(inventory(player));
         healthBaseline = player.getHealth();
         observedTick = -1;
+        lastTickWasAutomatic = false;
     }
     private static void observePlayable(ServerPlayerEntity player) {
         if (memories == null || tracks.isEmpty() || loopTick % 20 != 0 || observedTick == loopTick) return;
@@ -247,6 +249,7 @@ public class DoppelgangerMod implements ModInitializer {
         if (!recording || world == null || owner == null) return;
         ServerPlayerEntity player = server.getPlayerManager().getPlayer(owner);
         if (player == null || player.getServerWorld() != world) return;
+        lastTickWasAutomatic = playableAutoMove;
         if (playableAutoMove && memories != null && !brains.isEmpty()
                 && loopTick != lastAutoTick) {
             lastAutoTick = loopTick;
@@ -261,8 +264,9 @@ public class DoppelgangerMod implements ModInitializer {
             if (current.size() < DAY_TICKS) {
                 current.add(player.getPos());
                 HabitBrain brain = brains.get(tracks.size() - 1);
-                brain.observe(player.getPos());
-                if (memories != null && current.size() % 20 == 0) {
+                // Do not train the policy on its own generated movement.
+                if (!lastTickWasAutomatic) brain.observe(player.getPos());
+                if (!lastTickWasAutomatic && memories != null && current.size() % 20 == 0) {
                     Vec3d p = player.getPos();
                     memories.remember(tracks.size() - 1, day, current.size() - 1,
                         new PersonalityMemoryStore.VecRecord(p.x, p.y, p.z,
@@ -566,8 +570,9 @@ public class DoppelgangerMod implements ModInitializer {
     private static int autoMove(ServerCommandSource src, boolean enabled) {
         if (!recording || !isOwner(src)) return say(src, "Start DNMS as the playable Nao first.");
         playableAutoMove = enabled;
+        lastTickWasAutomatic = enabled;
         lastAutoTick = -1;
-        report("Playable Nao automatic movement " + (enabled ? "enabled" : "disabled"));
+        report("Playable Nao automatic movement " + (enabled ? "enabled; generated movement excluded from habit training" : "disabled"));
         return say(src, "AMP " + (enabled ? "ON" : "OFF")
             + ": shared personality controls horizontal movement; use /doppel automove off to stop.");
     }
