@@ -712,8 +712,14 @@ public class DoppelgangerMod implements ModInitializer {
         } catch (IOException ex) {
             logMIP("Could not load enabled setting; using default ON: " + ex.getMessage());
         }
-        // Ignore any older custom schedule: memory integration is fixed at 00:00.
-        mipScheduleTick = 18000;
+        try {
+            mipScheduleTick = Files.isRegularFile(mipScheduleFile())
+                ? parseMinecraftClock(Files.readString(mipScheduleFile(), StandardCharsets.UTF_8).trim())
+                : 18000;
+        } catch (IOException | IllegalArgumentException ex) {
+            mipScheduleTick = 18000;
+            LOG.warning("Invalid MIP schedule; defaulting to 00:00: " + ex.getMessage());
+        }
         logMIP("Initialized; enabled=" + mipEnabled + "; daily time="
             + formatMinecraftClock(mipScheduleTick) + ". Use /doppel mip status|on|off|run|logs|time.");
         CommandRegistrationCallback.EVENT.register((dispatcher, registry, environment) ->
@@ -1203,18 +1209,14 @@ public class DoppelgangerMod implements ModInitializer {
     }
 
     private static int mipTimeSet(ServerCommandSource src, String clock) {
-        if (!"00:00".equals(clock))
-            return say(src, "MIP is fixed to Minecraft 00:00; other schedules are disabled.");
-        mipScheduleTick = 18000;
+        final int tick;
+        try { tick = parseMinecraftClock(clock); }
+        catch (IllegalArgumentException ex) { return say(src, ex.getMessage()); }
+        try { writeAtomic(mipScheduleFile(), clock); }
+        catch (IOException ex) { return say(src, "Could not save MIP schedule: " + ex.getMessage()); }
+        mipScheduleTick = tick;
         scheduleInitialized = false;
-        try {
-            Path file = mipScheduleFile();
-            Files.createDirectories(file.getParent());
-            Files.writeString(file, "00:00", StandardCharsets.UTF_8);
-        } catch (IOException ex) {
-            return say(src, "Could not save midnight setting: " + ex.getMessage());
-        }
-        return say(src, "MIP runs at Minecraft 00:00.");
+        return say(src, "MIP scheduled at Minecraft " + clock + " (tick " + tick + ").");
     }
 
     private static void integrateTrainingMidnight() {
@@ -1222,7 +1224,7 @@ public class DoppelgangerMod implements ModInitializer {
         if (!mipEnabled || memories == null || lastIntegratedTrainingDay == integrationKey) return;
         try {
             memories.flush();
-            logMIP("Daily 00:00 (day " + day + "): "
+            logMIP("Scheduled " + formatMinecraftClock(mipScheduleTick) + " (day " + day + "): "
                 + MemoryIntegrationPatch.integrate(memories.directory()));
             if (sharedKnowledge != null) sharedKnowledge.refresh();
             writeAtomic(mipCompletedFile(), Integer.toString(integrationKey));
@@ -1239,16 +1241,16 @@ public class DoppelgangerMod implements ModInitializer {
         lastObservedTime = current;
         if (!scheduleInitialized) {
             scheduleInitialized = true;
-            // Resume after midnight: catch up instead of waiting another day.
-            if (Math.floorMod(current, DAY_TICKS) >= 18000) integrateTrainingMidnight();
+            // Catch up on startup/resume if the scheduled clock has passed.
+            if (Math.floorMod(current, DAY_TICKS) >= mipScheduleTick) integrateTrainingMidnight();
             return;
         }
         long previousDay = Math.floorDiv(previous, DAY_TICKS);
         long currentDay = Math.floorDiv(current, DAY_TICKS);
         boolean crossedMidnight = currentDay > previousDay
-            || (currentDay == previousDay && Math.floorMod(previous, DAY_TICKS) < 18000
-                && Math.floorMod(current, DAY_TICKS) >= 18000);
-        if (crossedMidnight || Math.floorMod(current, DAY_TICKS) >= 18000)
+            || (currentDay == previousDay && Math.floorMod(previous, DAY_TICKS) < mipScheduleTick
+                && Math.floorMod(current, DAY_TICKS) >= mipScheduleTick);
+        if (crossedMidnight || Math.floorMod(current, DAY_TICKS) >= mipScheduleTick)
             integrateTrainingMidnight();
     }
 
