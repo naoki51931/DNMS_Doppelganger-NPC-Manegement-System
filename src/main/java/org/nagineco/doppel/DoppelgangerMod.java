@@ -27,6 +27,8 @@ import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
+import net.minecraft.text.ClickEvent;
+import net.minecraft.util.Formatting;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.math.EulerAngle;
@@ -79,6 +81,159 @@ public class DoppelgangerMod implements ModInitializer {
             + " (requires an initialized or resumed session and /doppel life on).");
     }
 
+    // Server-only interactive chat dashboard: no client mod or web server required.
+    private static final int DEFAULT_NAOS = 24;
+    private static int configuredMaxNaos = 24;
+    private static Path maxNaosFile() {
+        return FabricLoader.getInstance().getConfigDir().resolve("doppelganger/max-naos.txt");
+    }
+    private static Text dashboardButton(String label, String command) {
+        return Text.literal(" [" + label + "]").formatted(Formatting.AQUA)
+            .styled(style -> style.withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, command)));
+    }
+    private static int dashboard(ServerCommandSource src) {
+        int count = life == null ? 0 : life.count();
+        src.sendFeedback(() -> Text.literal("DOPPELGÄNGER UNLIMITED | 外側の世界 / Outer World")
+            .formatted(Formatting.GOLD), false);
+        src.sendFeedback(() -> Text.literal("奈央 / Naos: " + count + "/" + configuredMaxNaos
+            + " | default: " + DEFAULT_NAOS + " | active: " + recording
+            + " | free-play: " + freePlay), false);
+        src.sendFeedback(() -> Text.literal("追加 / Add:")
+            .append(dashboardButton("+1", "/doppel dashboard add 1"))
+            .append(dashboardButton("+4", "/doppel dashboard add 4"))
+            .append(dashboardButton("初期24 / Bootstrap", "/doppel dashboard bootstrap")), false);
+        src.sendFeedback(() -> Text.literal("管理 / Manage:")
+            .append(dashboardButton("状態 / Status", "/doppel dashboard"))
+            .append(dashboardButton("生活 / Life", "/doppel life status"))
+            .append(dashboardButton("記憶 / MIP", "/doppel mip status")), false);
+        src.sendFeedback(() -> Text.literal("設定 / Configuration: /doppel dashboard max <1..24> (restart-safe)")
+            .formatted(Formatting.GRAY), false);
+        if (life != null) for (int i = 0; i < life.count(); i++) {
+            final NaoLifeStore.Nao n = life.get(i);
+            final int slot = i + 1;
+            src.sendFeedback(() -> Text.literal(String.format(java.util.Locale.ROOT,
+                "%02d %s | %s | %s", slot, n.occupation, n.residence, n.longTermGoal))
+                .append(dashboardButton("詳細 / Details", "/doppel dashboard profile " + slot)), false);
+        }
+        return 1;
+    }
+    private static int setMaxNaos(ServerCommandSource src, int maximum) {
+        if (recording) return say(src, "Stop the active session before changing the maximum.");
+        if (life != null && maximum < life.count())
+            return say(src, "Maximum cannot be smaller than existing Nao identities.");
+        try {
+            writeAtomic(maxNaosFile(), Integer.toString(maximum));
+            configuredMaxNaos = maximum;
+            return say(src, "Maximum Nao identities set to " + maximum + ". Default is 24.");
+        } catch (IOException ex) { return say(src, "Could not save maximum: " + ex.getMessage()); }
+    }
+    private static int bootstrapNaos(ServerCommandSource src) {
+        if (recording) return say(src, "Session already active.");
+        ServerPlayerEntity player;
+        try { player = src.getPlayerOrThrow(); }
+        catch (Exception ex) { return say(src, "Run as an operator player."); }
+        clearGhosts();
+        tracks.clear(); brains.clear(); reports.clear();
+        try {
+            memories = new PersonalityMemoryStore(FabricLoader.getInstance().getGameDir()
+                .resolve("config/doppelganger/memories"));
+            initializeLife(configuredMaxNaos);
+            for (int i = 0; i < configuredMaxNaos; i++) {
+                tracks.add(new ArrayList<>(List.of(player.getPos())));
+                HabitBrain brain = new HabitBrain();
+                memories.restore(i, brain);
+                memories.restoreRewards(i, brain);
+                brains.add(brain);
+            }
+        } catch (IOException ex) {
+            tracks.clear(); brains.clear();
+            return say(src, "Could not bootstrap Naos: " + ex.getMessage());
+        }
+        owner = player.getUuid();
+        world = player.getServerWorld();
+        dawn = player.getBlockPos();
+        day = 1; selected = 0; loopTick = 0;
+        freePlay = true; recording = true; aiMode = true; playableAutoMove = false;
+        scheduleInitialized = false; lastCheckpointTick = Long.MIN_VALUE;
+        resetObservations(player);
+        spawnGhosts();
+        try { saveSession(); }
+        catch (IOException ex) { report("Bootstrap checkpoint failed: " + ex.getMessage()); }
+        return dashboard(src);
+    }
+    private static int addNaos(ServerCommandSource src, int amount) {
+        if (!recording || !freePlay || life == null || world == null || memories == null)
+            return say(src, "Start a free-play session first with /doppel dashboard bootstrap.");
+        if (!isOwner(src)) return say(src, "Only the owner may add Naos.");
+        if (tracks.size() + amount > configuredMaxNaos)
+            return say(src, "Configured Nao maximum reached.");
+        try {
+            for (int i = 0; i < amount; i++) {
+                int slot = tracks.size();
+                life.ensure(slot);
+                tracks.add(new ArrayList<>(List.of(Vec3d.ofCenter(dawn))));
+                HabitBrain brain = new HabitBrain();
+                memories.restore(slot, brain);
+                memories.restoreRewards(slot, brain);
+                brains.add(brain);
+            }
+            life.save();
+            spawnGhosts();
+            saveSession();
+            return dashboard(src);
+        } catch (IOException ex) { return say(src, "Nao addition failed: " + ex.getMessage()); }
+    }
+    private static int profile(ServerCommandSource src, int slot) {
+        if (life == null || slot > life.count()) return say(src, "Nao does not exist.");
+        NaoLifeStore.Nao n = life.get(slot - 1);
+        return say(src, "Nao " + slot + " | occupation=" + n.occupation + " | home=" + n.residence
+            + " | goal=" + n.longTermGoal + " | work=" + n.workStart + "-" + n.workEnd
+            + " | relationships=" + n.personalRelationships);
+    }
+    private static int updateProfile(ServerCommandSource src, int slot, String field, String value) {
+        if (!isOwner(src) || life == null || slot > life.count()) return say(src, "Owner and existing Nao required.");
+        NaoLifeStore.Nao n = life.get(slot - 1);
+        if (!value.matches("[A-Za-z0-9_/-]{1,48}")) return say(src, "Use 1-48 letters, digits, _, / or -.");
+        switch (field) {
+            case "job" -> n.occupation = value;
+            case "home" -> n.residence = value;
+            case "goal" -> n.longTermGoal = value;
+            default -> { return say(src, "Unknown profile field."); }
+        }
+        try { life.save(); return profile(src, slot); }
+        catch (IOException ex) { return say(src, "Profile save failed: " + ex.getMessage()); }
+    }
+    private static int relationshipRole(ServerCommandSource src, int from, int to, String role) {
+        if (!isOwner(src) || life == null || from > life.count() || to > life.count() || from == to)
+            return say(src, "Two distinct existing Naos and owner required.");
+        if (!List.of("FRIEND", "FAMILY", "COLLEAGUE", "PARTNER", "SPOUSE", "PARENT", "CHILD").contains(role))
+            return say(src, "Invalid relationship role.");
+        life.get(from - 1).personalRelationships.put(life.get(to - 1).id, role);
+        try { life.save(); return say(src, "Nao " + from + " -> " + to + ": " + role); }
+        catch (IOException ex) { return say(src, "Relationship save failed: " + ex.getMessage()); }
+    }
+    private static void dailyLifeEvents() {
+        if (!freePlay || life == null || memories == null || world == null || loopTick % 200 != 0) return;
+        long currentDay = Math.floorDiv(world.getTimeOfDay(), 24000);
+        int hour = (int) ((world.getTimeOfDay() % 24000 + 6000) % 24000 / 1000);
+        for (int i = 0; i < life.count(); i++) {
+            NaoLifeStore.Nao n = life.get(i);
+            if (n.lastRoutineDay != currentDay && hour >= 9) {
+                n.lastRoutineDay = currentDay;
+                String activity = hour < n.workEnd ? "work:" + n.occupation : "home:" + n.residence;
+                memories.rememberEvent(i, day, loopTick, "life_routine",
+                    "activity=" + activity + " long_term_goal=" + n.longTermGoal);
+                n.lastAction = "ROUTINE";
+            }
+            if (n.lastRelationshipDay != currentDay && hour >= 18 && !n.personalRelationships.isEmpty()) {
+                n.lastRelationshipDay = currentDay;
+                for (Map.Entry<String, String> relation : n.personalRelationships.entrySet())
+                    memories.rememberEvent(i, day, loopTick, "life_relationship",
+                        "with=" + relation.getKey() + " role=" + relation.getValue()
+                            + " activity=evening_checkin");
+            }
+        }
+    }
     private static Path socialFile() {
         return FabricLoader.getInstance().getConfigDir().resolve("doppelganger/nao_social.json");
     }
@@ -789,9 +944,36 @@ public class DoppelgangerMod implements ModInitializer {
         }
         logMIP("Initialized; enabled=" + mipEnabled + "; daily time="
             + formatMinecraftClock(mipScheduleTick) + ". Use /doppel mip status|on|off|run|logs|time.");
+        try { configuredMaxNaos = Files.isRegularFile(maxNaosFile())
+            ? Integer.parseInt(Files.readString(maxNaosFile(), StandardCharsets.UTF_8).trim()) : DEFAULT_NAOS;
+            if (configuredMaxNaos < 1 || configuredMaxNaos > 24) configuredMaxNaos = DEFAULT_NAOS;
+        } catch (IOException | NumberFormatException ex) { configuredMaxNaos = DEFAULT_NAOS; }
         CommandRegistrationCallback.EVENT.register((dispatcher, registry, environment) ->
             dispatcher.register(literal("doppel")
                 .requires(s -> s.hasPermissionLevel(2))
+                .then(literal("dashboard")
+                    .executes(c -> dashboard(c.getSource()))
+                    .then(literal("bootstrap").executes(c -> bootstrapNaos(c.getSource())))
+                    .then(literal("add").then(argument("count", IntegerArgumentType.integer(1, 24))
+                        .executes(c -> addNaos(c.getSource(), IntegerArgumentType.getInteger(c, "count")))))
+                    .then(literal("max").then(argument("count", IntegerArgumentType.integer(1, 24))
+                        .executes(c -> setMaxNaos(c.getSource(), IntegerArgumentType.getInteger(c, "count")))))
+                    .then(literal("profile").then(argument("slot", IntegerArgumentType.integer(1, 24))
+                        .executes(c -> profile(c.getSource(), IntegerArgumentType.getInteger(c, "slot")))))
+                    .then(literal("job").then(argument("slot", IntegerArgumentType.integer(1, 24))
+                        .then(argument("value", StringArgumentType.word())
+                            .executes(c -> updateProfile(c.getSource(), IntegerArgumentType.getInteger(c, "slot"), "job", StringArgumentType.getString(c, "value"))))))
+                    .then(literal("home").then(argument("slot", IntegerArgumentType.integer(1, 24))
+                        .then(argument("value", StringArgumentType.word())
+                            .executes(c -> updateProfile(c.getSource(), IntegerArgumentType.getInteger(c, "slot"), "home", StringArgumentType.getString(c, "value"))))))
+                    .then(literal("goal").then(argument("slot", IntegerArgumentType.integer(1, 24))
+                        .then(argument("value", StringArgumentType.word())
+                            .executes(c -> updateProfile(c.getSource(), IntegerArgumentType.getInteger(c, "slot"), "goal", StringArgumentType.getString(c, "value"))))))
+                    .then(literal("relation").then(argument("from", IntegerArgumentType.integer(1, 24))
+                        .then(argument("to", IntegerArgumentType.integer(1, 24))
+                            .then(argument("role", StringArgumentType.word())
+                                .executes(c -> relationshipRole(c.getSource(), IntegerArgumentType.getInteger(c, "from"), IntegerArgumentType.getInteger(c, "to"), StringArgumentType.getString(c, "role")))))))
+                )
                 .then(literal("start").executes(c -> start(c.getSource())))
                 .then(literal("growth")
                     .then(literal("status").executes(c -> growthStatus(c.getSource())))
@@ -955,6 +1137,7 @@ public class DoppelgangerMod implements ModInitializer {
         ServerPlayerEntity player = server.getPlayerManager().getPlayer(owner);
         boolean ownerPresent = player != null && player.getServerWorld() == world;
         if (!ownerPresent && !(offlineNpcMode && lifeAiEnabled)) return;
+        if (lifeAiEnabled) dailyLifeEvents();
         lastTickWasAutomatic = playableAutoMove;
         if (ownerPresent && playableAutoMove && memories != null && !brains.isEmpty()
                 && loopTick != lastAutoTick) {
