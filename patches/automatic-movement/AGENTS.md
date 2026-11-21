@@ -1,5 +1,16 @@
 # AMP — developer notes
 
+<!-- DNMS_PATCH_BILINGUAL_CURRENT_BEGIN -->
+
+## 日本語：開発ルール
+AMPは任意機能で初期OFFを維持し、`/doppel automove off` ですぐ停止できること。人格は唯一の `nao_personality.md` を共有し、別のプレイアブル人格を作らない。垂直速度を維持し、毎tickテレポートさせない。AMPが生成した移動を人間の実演として再学習させず、モード切り替え時には観測アンカーをリセットする。衝突・足場判定を完全な経路探索や落下防止と呼ばない。アイテム増加と被ダメージの符号付き記録は注釈であり、自動的な因果学習ではない。JSONチェックポイント前にMarkdownをフラッシュし、複数ファイルの保存が完全な原子的処理ではない点を維持する。欠損データ・障害物・停止時の試験を行う。
+
+## English: Developer Rules
+Keep AMP opt-in and OFF by default, with immediate `/doppel automove off`. Reuse the single `nao_personality.md` and never introduce a separate playable personality. Preserve vertical velocity; do not teleport every tick. Exclude AMP-generated movements from human demonstrations and reset observation anchors when switching modes. Do not equate collision/support checks with pathfinding or guaranteed fall protection. Signed item/health observations are annotations, not causal learning. Flush Markdown before JSON checkpoints and document the lack of full cross-file atomicity. Test missing data, blocked positions and shutdown.
+
+<!-- DNMS_PATCH_BILINGUAL_CURRENT_END -->
+
+
 - Keep automatic movement opt-in, with an immediate `/doppel automove off` escape.
 - Reuse the single authoritative `nao_personality.md` and `HabitBrain.sharedDecision`; do not create a separate playable personality.
 - Preserve vertical velocity; do not teleport the player each tick.
