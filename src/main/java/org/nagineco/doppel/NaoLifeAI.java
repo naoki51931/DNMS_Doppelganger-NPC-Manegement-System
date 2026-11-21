@@ -55,7 +55,7 @@ public final class NaoLifeAI {
             nao.goalUntilTick = tick + 200;
         } else if (tick >= nao.goalUntilTick
                 || (nao.goal == NaoLifeStore.Goal.REST && nao.energy >= 80)) {
-            nao.goal = chooseGoal(nao, memory, tick);
+            nao.goal = NaoGoalPlanner.choose(nao, memory).primary();
             nao.goalUntilTick = tick + 1200;
         }
         nao.decisions++;
