@@ -58,6 +58,9 @@ public class DoppelgangerMod implements ModInitializer {
     private static NaoSocialStore social;
     private static SharedMemoryReader sharedKnowledge;
     private static boolean lifeAiEnabled = false;
+    private static Path socialFile() {
+        return FabricLoader.getInstance().getConfigDir().resolve("doppelganger/nao_social.json");
+    }
     private static Path lifeFile() {
         return FabricLoader.getInstance().getConfigDir().resolve("doppelganger/nao_lives.json");
     }
@@ -73,7 +76,7 @@ public class DoppelgangerMod implements ModInitializer {
         try { life.appearanceRegistry(); }
         catch (RuntimeException ex) { throw new IOException("Invalid Nao appearance registry", ex); }
         life.save();
-        social = new NaoSocialStore(FabricLoader.getInstance().getConfigDir().resolve("doppelganger/nao_social.json"));
+        social = new NaoSocialStore(socialFile());
         social.load();
         sharedKnowledge = new SharedMemoryReader(memories.directory().resolve("nao_integrated_memory.md"));
         sharedKnowledge.refresh();
@@ -376,7 +379,8 @@ public class DoppelgangerMod implements ModInitializer {
         if (life != null) life.save();
         if (social != null) social.save();
         GenerationCheckpointStore.publish(checkpointRoot(), snapshotFile(),
-            memories.directory(), playerFile, life == null ? null : lifeFile());
+            memories.directory(), playerFile, life == null ? null : lifeFile(),
+            social == null ? null : socialFile());
     }
     private static int saveCommand(ServerCommandSource src) {
         if (!recording) return say(src, "No active session to save.");
@@ -412,6 +416,11 @@ public class DoppelgangerMod implements ModInitializer {
             if (generation != null && Files.isRegularFile(generation.resolve("nao_lives.json"))) {
                 Files.createDirectories(lifeFile().getParent());
                 Files.copy(generation.resolve("nao_lives.json"), lifeFile(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+            if (generation != null && Files.isRegularFile(generation.resolve("nao_social.json"))) {
+                Files.createDirectories(socialFile().getParent());
+                Files.copy(generation.resolve("nao_social.json"), socialFile(),
                     java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             }
             if (generation != null) GenerationCheckpointStore.restoreMemories(generation,
