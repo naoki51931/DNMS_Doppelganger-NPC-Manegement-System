@@ -72,6 +72,33 @@ public class DoppelgangerMod implements ModInitializer {
         sharedKnowledge = new SharedMemoryReader(memories.directory().resolve("nao_integrated_memory.md"));
         sharedKnowledge.refresh();
     }
+    private static int appearanceStatus(ServerCommandSource src, int slot) {
+        if (life == null || slot > life.count()) return say(src, "Nao " + slot + " is not initialized.");
+        NaoLifeStore.Nao nao = life.get(slot - 1);
+        return say(src, "Nao " + slot + " UUID=" + nao.id + " skinKey=" + nao.skinKey
+            + " (appearance metadata only; currently rendered as armor stand).");
+    }
+    private static int appearanceSet(ServerCommandSource src, int slot, String skinKey) {
+        if (!isOwner(src)) return say(src, "Only playable Nao may set NPC appearance.");
+        if (life == null || slot > life.count()) return say(src, "Nao " + slot + " is not initialized.");
+        NaoLifeStore.Nao nao = life.get(slot - 1);
+        try {
+            new org.nagineco.doppel.appearance.NaoAppearanceRegistry.NaoAppearance(
+                slot, UUID.fromString(nao.id), skinKey, true);
+        } catch (IllegalArgumentException ex) {
+            return say(src, "Invalid skin key. Use 1-128 letters, digits, _, ., /, :, -; no '..'.");
+        }
+        String previous = nao.skinKey;
+        nao.skinKey = skinKey;
+        try {
+            life.save();
+        } catch (IOException ex) {
+            nao.skinKey = previous;
+            return say(src, "Appearance save failed: " + ex.getMessage());
+        }
+        return say(src, "Nao " + slot + " skin key saved as " + skinKey
+            + "; model/skin rendering not implemented yet.");
+    }
     private static int lifeToggle(ServerCommandSource src, boolean enabled) {
         if (!isOwner(src)) return say(src, "Only playable Nao can change life AI.");
         try {
@@ -402,6 +429,14 @@ public class DoppelgangerMod implements ModInitializer {
                     .then(literal("on").executes(c -> lifeToggle(c.getSource(), true)))
                     .then(literal("off").executes(c -> lifeToggle(c.getSource(), false)))
                     .then(literal("status").executes(c -> lifeStatus(c.getSource()))))
+                .then(literal("appearance")
+                    .then(literal("status").then(argument("slot", IntegerArgumentType.integer(1, 24))
+                        .executes(c -> appearanceStatus(c.getSource(), IntegerArgumentType.getInteger(c, "slot")))))
+                    .then(literal("set").then(argument("slot", IntegerArgumentType.integer(1, 24))
+                        .then(argument("skinKey", StringArgumentType.word())
+                            .executes(c -> appearanceSet(c.getSource(),
+                                IntegerArgumentType.getInteger(c, "slot"),
+                                StringArgumentType.getString(c, "skinKey")))))))
                 .then(literal("reward")
                     .then(literal("on").executes(c -> rewardToggle(c.getSource(), true)))
                     .then(literal("off").executes(c -> rewardToggle(c.getSource(), false)))
