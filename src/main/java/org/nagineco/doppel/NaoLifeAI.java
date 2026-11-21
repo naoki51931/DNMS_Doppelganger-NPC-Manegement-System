@@ -36,8 +36,13 @@ public final class NaoLifeAI {
     }
     public static HabitBrain.Move move(NaoLifeStore.Nao nao, List<HabitBrain> brains,
             int index, int tick, PersonalityMemoryStore personality,
-            boolean rewardEnabled) {
+            boolean rewardEnabled, SharedMemoryReader memory, Vec3d position) {
         if (nao.goal == NaoLifeStore.Goal.REST) return HabitBrain.Move.STAY;
+        // All individuals can consult a nearby experience, regardless of its original owner.
+        if (memory != null && position != null) {
+            var nearby = memory.nearest(nao.goal, position, 16.0);
+            if (nearby.isPresent()) return nearby.get().action();
+        }
         HabitBrain.Move learned = HabitBrain.sharedDecision(brains, index, tick, personality, rewardEnabled);
         if (learned != HabitBrain.Move.STAY) return learned;
         HabitBrain.Move[] directions = { HabitBrain.Move.NORTH, HabitBrain.Move.EAST,
