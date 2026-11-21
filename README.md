@@ -1,5 +1,15 @@
 # Doppel NPC Management System (DNMS)
 
+## Current implementation status (2026-11-21; supersedes earlier stage tables)
+
+- **Autonomous social interaction:** When `/doppel life on` is enabled, nearby stand-ins (within six blocks) exchange context-selected Japanese dialogue lines every 400 loop ticks. Both directed familiarity values increase, individual SOCIAL skill and TALK evidence are recorded, and `npc_dialogue` events enter the per-Nao journals. Mutual familiarity/trust thresholds enable reciprocal romance opt-in and bounded `ROMANCE_REQUEST` affection growth, recorded as `npc_romance`. This is deterministic, template-based autonomous behavior, **not** open-ended language generation, sophisticated emotional simulation, or an interactive dialogue UI. Existing single shared personality remains unchanged.
+- **Daily memory integration:** MIP runs at Minecraft 00:00 (tick 18000). Missed clock crossings, resumes after midnight and manual `/doppel next` use a per-session-day catch-up attempt before the day is reset; failed integrations retry. `/doppel mip run` is still available. Experience weights remain unchanged. This is a best-effort retry mechanism, **not an absolute guarantee during server downtime or storage failures**.
+- **Position persistence:** Every session checkpoint now saves each live stand-in's last coordinates alongside its stable Nao UUID in `nao_lives.json`. On `/doppel resume`, stand-ins are reconstructed at saved positions; growing the population keeps existing live stand-ins intact. `/doppel stop` still discards the temporary Minecraft armor stands while preserving their logical identity and last checkpointed coordinates. A crash can lose changes since the most recent successful checkpoint; world chunk availability and spawn errors remain unverified. **Automatic session resume on server boot is not implemented**.
+- **Relationship checkpoint consistency:** New generations include `nao_social.json` and restore it on resume when present. Older generations without this file retain legacy behavior. Multi-file restore can still partially fail and is not transactional.
+- **Deferred by request:** building protection and target pathfinding remain future work.
+- **Verification:** The earlier GitHub Actions build #55 passed on commit `7c347de`. Changes listed in this section require their **own** CI and Minecraft runtime verification; do not treat #55 as verification of newer code.
+
+
 
 **DNMS** (formerly Doppelganger NPC System) is an experimental Minecraft Java Edition **Fabric 1.21.1** server mod plus C++ console prototypes for a 24-character daily loop.
 
@@ -377,7 +387,7 @@ This is a **partial foundation**, not seven completed Minecraft features. The us
 
 ## Implementation update: region restore, avatar control, MIP planner, owner-mediated growth (2026-11-21)
 
-These changes are **unverified by CI and Minecraft runtime**; batch build errors at the next milestone.
+Historical note: these changes were unverified when this section was written; consult the current implementation status above and GitHub Actions for the latest CI result.
 
 - **Real block restoration (limited scope):** `/doppel region on <radius>` captures the currently loaded blocks in a cube centered on playable Nao, horizontal radius 1..12 and vertical half-height 4. `/doppel next` restores captured block states before advancing the training loop. `/doppel region off` disables it. Snapshot is **in memory only**, not persistent across restarts. It refuses any pre-existing block entity and any unloaded chunk, and refuses restore when a new block entity exists. It does **not** rewind the whole Minecraft world, other players, mobs, inventories, block entities, fluid ticks, or cross-dimension state. On a partial restore failure some blocks may already have changed. Default remains clock + owner position only. Always back up the world before using this opt-in experimental mode.
 - **Playable avatar routed to a selected NPC:** `/doppel control select <slot>` in free-play moves the owner's actual player avatar to the selected Nao, pauses that stand-in's AI, and synchronizes its position with the player each tick; `/doppel control release` restores the owner's previous location and releases NPC autonomy. This allows actual keyboard/mouse actions through the **existing player avatar** in the NPC location. It is **not** native possession of a distinct `ServerPlayerEntity`, does not swap inventory/identity/skin, and does not guarantee collisions or full independence. Existing `/doppel select` remains a teleport.
