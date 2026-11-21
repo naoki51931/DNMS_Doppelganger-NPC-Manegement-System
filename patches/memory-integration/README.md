@@ -1,4 +1,4 @@
-# Memory Integration Patch
+# Memory Integration Patch — DNMS
 
 **Status:** standalone Java 21 patch / offline tool. Not automatically loaded by Fabric.
 
