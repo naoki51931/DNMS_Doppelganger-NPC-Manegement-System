@@ -113,6 +113,11 @@ public final class HabitBrain {
         };
     }
 
+    public void learnMemory(Move move, Emotion e, Reason r, int tick) {
+        counts[tick >= 12000 ? 1 : 0][e.ordinal()][r.ordinal()][move.ordinal()]++;
+        samples++;
+    }
+
     public Move latestMove() {
         if (observations.size() < 2) return Move.STAY;
         return classify(observations.get(observations.size() - 1)
