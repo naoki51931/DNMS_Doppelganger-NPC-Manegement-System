@@ -372,3 +372,21 @@ This is a **partial foundation**, not seven completed Minecraft features. The us
 - Mannequin walking animation is **ON by default**, persists an explicit OFF choice in `config/doppelganger/mannequin-animation.enabled`. Do not flip the default.
 - Existing `/doppel select` is a teleport only. Avoid presenting it as NPC possession.
 - Never claim build success for these commits without an actual CI result. The newly added core model tests run in `gradle clean build`; batch subsequent compilation fixes.
+
+
+## Implementation update: region restore, avatar control, MIP planner, owner-mediated growth (2026-11-21)
+
+These changes are **unverified by CI and Minecraft runtime**; batch build errors at the next milestone.
+
+- **Real block restoration (limited scope):** `/doppel region on <radius>` captures the currently loaded blocks in a cube centered on playable Nao, horizontal radius 1..12 and vertical half-height 4. `/doppel next` restores captured block states before advancing the training loop. `/doppel region off` disables it. Snapshot is **in memory only**, not persistent across restarts. It refuses any pre-existing block entity and any unloaded chunk, and refuses restore when a new block entity exists. It does **not** rewind the whole Minecraft world, other players, mobs, inventories, block entities, fluid ticks, or cross-dimension state. On a partial restore failure some blocks may already have changed. Default remains clock + owner position only. Always back up the world before using this opt-in experimental mode.
+- **Playable avatar routed to a selected NPC:** `/doppel control select <slot>` in free-play moves the owner's actual player avatar to the selected Nao, pauses that stand-in's AI, and synchronizes its position with the player each tick; `/doppel control release` restores the owner's previous location and releases NPC autonomy. This allows actual keyboard/mouse actions through the **existing player avatar** in the NPC location. It is **not** native possession of a distinct `ServerPlayerEntity`, does not swap inventory/identity/skin, and does not guarantee collisions or full independence. Existing `/doppel select` remains a teleport.
+- **Integrated-memory planning:** `NaoGoalPlanner` ranks candidate goals using MIP evidence, per-action outcome statistics, and existing reward preferences, with a primary and fallback goal. `NaoLifeAI.plan` now uses the primary goal; `/doppel plan <slot>` shows the current plan and its evidence. Fallback is informational, not yet executed as a multi-step plan. The planner does not understand natural language or causal outcomes.
+- **Personality changes mediated by playable Nao:** `/doppel growth propose <slot>` evaluates observed per-Nao action outcomes (minimum 10 attempts) and **presents** suggested strengths to the playable Nao owner in chat. It **never automatically edits** `nao_personality.md`; proposals are not persisted and no approval/application command is implemented. The player remains the authority for changes.
+
+### Outstanding work
+
+1. Implement durable, consistent, multi-dimension **full-world** snapshots/restore with block entities, entities, inventories, schedules and crash-safe commit. Current implementation is a small block-only cube, not full-world rollback.
+2. Replace armor stands with actual player-model entities and support complete avatar/identity/inventory control transfer. Current control is player-avatar movement mirrored to a stand-in.
+3. Build a multi-step planner with execution, retry, resource requirements and success/failure feedback. Current MIP planner selects a goal, not a full plan.
+4. Persist and present growth proposals with explicit owner approval, versioned personality updates, audit trail, and conflict handling.
+5. Verify Fabric 1.21.1 compile, unit tests and in-game behavior for all changes after last known green build `7c46db9`.
