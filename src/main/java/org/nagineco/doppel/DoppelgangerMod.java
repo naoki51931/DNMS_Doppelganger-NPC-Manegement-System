@@ -63,6 +63,7 @@ public class DoppelgangerMod implements ModInitializer {
     private static NaoLifeStore life;
     private static NaoSocialStore social;
     private static SharedMemoryReader sharedKnowledge;
+    private static NaoPeopleRegistry people;
     private static boolean lifeAiEnabled = false;
     private static boolean offlineNpcMode = false;
     private static Path offlineNpcModeFile() {
@@ -178,6 +179,9 @@ public class DoppelgangerMod implements ModInitializer {
                 brains.add(brain);
             }
             life.save();
+            if (people != null) { for (int i = 0; i < life.count(); i++) {
+                NaoLifeStore.Nao n = life.get(i); people.add(n.id, "Nao_" + n.number, "NAO");
+            } people.save(); }
             spawnGhosts();
             saveSession();
             return dashboard(src);
@@ -234,6 +238,9 @@ public class DoppelgangerMod implements ModInitializer {
             }
         }
     }
+    private static Path peopleFile() {
+        return FabricLoader.getInstance().getConfigDir().resolve("doppelganger/people.json");
+    }
     private static Path socialFile() {
         return FabricLoader.getInstance().getConfigDir().resolve("doppelganger/nao_social.json");
     }
@@ -254,6 +261,13 @@ public class DoppelgangerMod implements ModInitializer {
         life.save();
         social = new NaoSocialStore(socialFile());
         social.load();
+        people = new NaoPeopleRegistry(peopleFile());
+        people.load();
+        for (int i = 0; i < life.count(); i++) {
+            NaoLifeStore.Nao n = life.get(i);
+            people.add(n.id, "Nao_" + n.number, "NAO");
+        }
+        people.save();
         sharedKnowledge = new SharedMemoryReader(memories.directory().resolve("nao_integrated_memory.md"));
         sharedKnowledge.refresh();
     }
@@ -468,7 +482,7 @@ public class DoppelgangerMod implements ModInitializer {
     }
 
     private static int controlNao(ServerCommandSource src, int slot) {
-        if (!isOwner(src) || !freePlay || life == null || tracks.size() != CHARACTERS || slot > life.count()
+        if (!isOwner(src) || !freePlay || life == null || tracks.size() < CHARACTERS || slot > life.count()
                 || slot > ghosts.size() || ghosts.get(slot - 1).isRemoved())
             return say(src, "Free-play and a live NPC are required.");
         ServerPlayerEntity player = src.getServer().getPlayerManager().getPlayer(owner);
@@ -493,9 +507,54 @@ public class DoppelgangerMod implements ModInitializer {
         ownerBeforeControl = null;
         return say(src, "Owner control restored.");
     }
+    private static int recallNao(ServerCommandSource src, int slot, String topic) {
+        if (life == null || memories == null || slot > life.count()) return say(src, "Nao not initialized.");
+        try {
+            var result = NaoMemoryRecall.recall(memories.directory(), slot, topic);
+            if (result.isEmpty()) return say(src, "No matching personal or replicated episode.");
+            life.get(slot - 1).lastRecalledMemory = result.get();
+            return say(src, "Nao " + slot + " recalls: " + result.get());
+        } catch (IOException ex) { return say(src, "Recall failed: " + ex.getMessage()); }
+    }
+    private static String personId(String token) {
+        if (token.matches("nao_[0-9]{1,3}") && life != null) {
+            int slot = Integer.parseInt(token.substring(4));
+            if (slot >= 1 && slot <= life.count()) return life.get(slot - 1).id;
+        }
+        return token;
+    }
+    private static int personAdd(ServerCommandSource src, String id) {
+        if (!isOwner(src) || people == null) return say(src, "Owner and initialized session required.");
+        if (!id.matches("[A-Za-z0-9_-]{1,48}")) return say(src, "Invalid person ID.");
+        people.add(id, id, "EXTERNAL");
+        try { people.save(); return say(src, "Registered external person: " + id); }
+        catch (IOException ex) { return say(src, "Registry save failed: " + ex.getMessage()); }
+    }
+    private static int personRelate(ServerCommandSource src, String first, String second, String role) {
+        if (!isOwner(src) || people == null) return say(src, "Owner and initialized session required.");
+        if (!List.of("FRIEND","FAMILY","COLLEAGUE","PARTNER","SPOUSE","PARENT","CHILD","HOUSEMATE").contains(role))
+            return say(src, "Invalid role.");
+        try {
+            people.relate(personId(first), personId(second), role);
+            people.save(); return say(src, "Relationship saved: " + first + " -> " + second + " = " + role);
+        } catch (IllegalArgumentException | IOException ex) { return say(src, ex.getMessage()); }
+    }
+    private static int personEvent(ServerCommandSource src, String first, String second, String event) {
+        if (!isOwner(src) || people == null) return say(src, "Owner and initialized session required.");
+        try {
+            people.event(personId(first), personId(second), event);
+            people.save(); return say(src, "Shared life event saved.");
+        } catch (IllegalArgumentException | IOException ex) { return say(src, ex.getMessage()); }
+    }
+    private static int personStatus(ServerCommandSource src, String id) {
+        if (people == null) return say(src, "No people registry.");
+        var p = people.get(personId(id));
+        return p == null ? say(src, "Unknown person") : say(src, p.name + " (" + p.kind
+            + ") relationships=" + p.relationships + " sharedEvents=" + p.sharedEvents.size());
+    }
     private static int planStatus(ServerCommandSource src, int slot) {
         if (life == null || slot > life.count()) return say(src, "Nao not initialized.");
-        var plan = NaoGoalPlanner.choose(life.get(slot - 1), sharedKnowledge);
+        var plan = NaoGoalPlanner.choosePersonal(life.get(slot - 1), sharedKnowledge, world == null ? 0 : world.getTime());
         return say(src, "Nao " + slot + " plan=" + plan.primary()
             + " fallback=" + plan.fallback() + " evidence=" + plan.evidence());
     }
@@ -666,6 +725,7 @@ public class DoppelgangerMod implements ModInitializer {
         rememberGhostPositions();
         if (life != null) life.save();
         if (social != null) social.save();
+        if (people != null) people.save();
         if (owner != null) writeAtomic(sessionOwnerFile(), owner.toString());
         GenerationCheckpointStore.publish(checkpointRoot(), snapshotFile(),
             memories.directory(), playerFile, life == null ? null : lifeFile(),
@@ -1041,6 +1101,30 @@ public class DoppelgangerMod implements ModInitializer {
                     .then(literal("on").executes(c -> rewardToggle(c.getSource(), true)))
                     .then(literal("off").executes(c -> rewardToggle(c.getSource(), false)))
                     .then(literal("status").executes(c -> say(c.getSource(), "Reward learning " + (rewardLearning ? "ON" : "OFF")))))
+                .then(literal("recall").then(argument("slot", IntegerArgumentType.integer(1, 256))
+                    .then(argument("topic", StringArgumentType.word())
+                        .executes(c -> recallNao(c.getSource(), IntegerArgumentType.getInteger(c, "slot"),
+                            StringArgumentType.getString(c, "topic"))))))
+                .then(literal("person")
+                    .then(literal("add").then(argument("id", StringArgumentType.word())
+                        .executes(c -> personAdd(c.getSource(), StringArgumentType.getString(c, "id")))))
+                    .then(literal("status").then(argument("id", StringArgumentType.word())
+                        .executes(c -> personStatus(c.getSource(), StringArgumentType.getString(c, "id")))))
+                    .then(literal("relate").then(argument("from", StringArgumentType.word())
+                        .then(argument("to", StringArgumentType.word())
+                            .then(argument("role", StringArgumentType.word())
+                                .executes(c -> personRelate(c.getSource(),
+                                    StringArgumentType.getString(c, "from"),
+                                    StringArgumentType.getString(c, "to"),
+                                    StringArgumentType.getString(c, "role")))))))
+                    .then(literal("event").then(argument("from", StringArgumentType.word())
+                        .then(argument("to", StringArgumentType.word())
+                            .then(argument("detail", StringArgumentType.word())
+                                .executes(c -> personEvent(c.getSource(),
+                                    StringArgumentType.getString(c, "from"),
+                                    StringArgumentType.getString(c, "to"),
+                                    StringArgumentType.getString(c, "detail")))))))
+                )
                 .then(literal("resume").executes(c -> resume(c.getSource())))
                 .then(literal("next").executes(c -> next(c.getSource())))
                 .then(literal("status").executes(c -> status(c.getSource())))
@@ -1214,6 +1298,16 @@ public class DoppelgangerMod implements ModInitializer {
                 long time = world.getTime();
                 if (loopTick % 20 == 0)
                     NaoLifeAI.plan(nao, sharedKnowledge, world, previous, time);
+                if (loopTick % 1200 == 0) {
+                    var personalPlan = NaoGoalPlanner.choosePersonal(nao, sharedKnowledge, time);
+                    if (nao.energy >= 20) { nao.goal = personalPlan.primary(); nao.goalUntilTick = time + 1200; }
+                    if (memories != null) memories.rememberEvent(i, day, loopTick,
+                        "goal_plan", personalPlan.evidence());
+                    try {
+                        var recalled = NaoMemoryRecall.recall(memories.directory(), i + 1, nao.longTermGoal);
+                        recalled.ifPresent(value -> nao.lastRecalledMemory = value);
+                    } catch (IOException ex) { report("Recall error: " + ex.getMessage()); }
+                }
                 if (nao.goal == NaoLifeStore.Goal.COLLECT && loopTick % 100 == 0
                         && nao.energy >= 20) {
                     boolean harvested = NaoWorkPatch.harvest(world, previous, nao);
