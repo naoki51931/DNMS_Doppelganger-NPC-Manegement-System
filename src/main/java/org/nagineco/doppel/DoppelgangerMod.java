@@ -85,10 +85,25 @@ public class DoppelgangerMod implements ModInitializer {
     private static Path snapshotFile() {
         return FabricLoader.getInstance().getGameDir().resolve("config/doppelganger/recordings.json");
     }
+    private static Path checkpointRoot() {
+        return FabricLoader.getInstance().getGameDir().resolve("config/doppelganger/checkpoints");
+    }
+    private static Path playerSnapshotFile() {
+        return FabricLoader.getInstance().getGameDir().resolve("config/doppelganger/player.json");
+    }
     private static void saveSession() throws IOException {
         if (memories == null) return;
         memories.flush();
         RecordingSnapshotStore.save(snapshotFile(), tracks, day, selected, freePlay);
+        ServerPlayerEntity player = owner == null || world == null ? null
+            : world.getServer().getPlayerManager().getPlayer(owner);
+        Path playerFile = null;
+        if (player != null && player.getServerWorld() == world) {
+            playerFile = playerSnapshotFile();
+            PlayerStateStore.save(playerFile, player);
+        }
+        GenerationCheckpointStore.publish(checkpointRoot(), snapshotFile(),
+            memories.directory(), playerFile);
     }
     private static int saveCommand(ServerCommandSource src) {
         if (!recording) return say(src, "No active session to save.");
@@ -110,11 +125,23 @@ public class DoppelgangerMod implements ModInitializer {
         PersonalityMemoryStore loadedMemories;
         List<HabitBrain> loadedBrains = new ArrayList<>();
         try {
-            snapshot = RecordingSnapshotStore.load(snapshotFile());
+            Path generation = GenerationCheckpointStore.latest(checkpointRoot());
+            Path recordingFile = generation == null ? snapshotFile()
+                : generation.resolve("recordings.json");
+            snapshot = RecordingSnapshotStore.load(recordingFile);
+            PlayerStateStore.State playerState = generation == null ? null
+                : (Files.exists(generation.resolve("player.json"))
+                    ? PlayerStateStore.load(generation.resolve("player.json")) : null);
+            if (playerState != null && !player.getServerWorld().getRegistryKey().getValue().toString()
+                    .equals(playerState.dimension))
+                return say(src, "Move to saved dimension before resuming: " + playerState.dimension);
+            if (generation != null) GenerationCheckpointStore.restoreMemories(generation,
+                FabricLoader.getInstance().getGameDir().resolve("config/doppelganger/memories"));
             loadedTracks = RecordingSnapshotStore.restoreTracks(snapshot);
             if (loadedTracks.isEmpty()) return say(src, "Snapshot has no recordings.");
             loadedMemories = new PersonalityMemoryStore(
                 FabricLoader.getInstance().getGameDir().resolve("config/doppelganger/memories"));
+            if (playerState != null) PlayerStateStore.restore(player, playerState);
             for (int i = 0; i < loadedTracks.size(); i++) {
                 HabitBrain brain = new HabitBrain();
                 loadedMemories.restore(i, brain);
@@ -146,7 +173,7 @@ public class DoppelgangerMod implements ModInitializer {
         resetObservations(player);
         if (!freePlay) {
             List<Vec3d> active = tracks.get(tracks.size() - 1);
-            if (!active.isEmpty()) {
+            if (!active.isEmpty() && !Files.exists(checkpointRoot().resolve("CURRENT"))) {
                 Vec3d last = active.get(active.size() - 1);
                 player.teleport(world, last.x, last.y, last.z, player.getYaw(), player.getPitch());
             }
