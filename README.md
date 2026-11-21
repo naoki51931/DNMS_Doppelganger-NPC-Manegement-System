@@ -1,36 +1,60 @@
 # Doppelganger NPC System
 
-C++17 prototype for a Minecraft-inspired world of 24 doppelganger characters.
+Experimental Minecraft Java Edition **Fabric 1.21.1** server mod plus C++ console prototypes for a 24-character daily loop.
 
-## Integrated simulator (recommended)
+## Fabric mod (early MVP)
 
-`src/doppel_integrated.cpp` combines **24 training rounds**, habit learning, NPC autonomy, episodic-memory clearing and unlimited character switching.
+The Java mod records one player's positions across repeated simulated days and replays past tracks as moving armor-stand ghosts. This is **not yet a complete Minecraft NPC or rollback implementation**.
+
+### Build
+
+Requires Java 21 and Gradle 8.x (no Gradle wrapper is included yet).
 
 ```bash
-g++ -std=c++17 -O2 -Wall -Wextra src/doppel_integrated.cpp -o doppel
-./doppel
+gradle build
 ```
 
-1. Control character #1 using `w/a/s/d` (movement), `g` (gather), `f` (flee), or `.` (wait).
-2. Type `next` to finish the round: the character becomes an NPC using a frequency-based learned policy. Its temporary episode log is cleared, but its learned habits and world state remain.
-3. Repeat through all 24 characters. Earlier NPCs act once per command/tick while the current character is controlled.
-4. After all 24 rounds, type `select 1` through `select 24` to take control of any character. The other 23 act as NPCs; switching is unlimited.
-5. Type `status` to inspect all characters, or `quit` to exit.
+Copy the generated `build/libs/doppelganger-npc-system-0.1.0.jar` into a compatible Fabric 1.21.1 server's `mods/` folder with Fabric API. Build and runtime compatibility have **not yet been verified**.
 
-Each NPC's learned policy maps a simplified observation (tree/night/danger) to its most frequently demonstrated action. If a situation was never demonstrated, the NPC waits. The world is a small simulated grid, not Minecraft itself.
+### Commands (operator permission required)
 
-**Limitations:** this is a console prototype; it does not connect to Minecraft, use real keyboard/mouse events, save progress to disk, or implement pathfinding/complex imitation learning. NPC actions advance when the player enters an action, not continuously in background time. In free-play, player actions do not update the NPC habit policy.
+- `/doppel start` — begin day 1 loop 1 and capture the player's position every server tick
+- `/doppel next` — finish the current recording, reset the clock and player position, and begin the next loop
+- `/doppel status` — show progress
+- `/doppel select 1` through `/doppel select 24` — after 24 recordings, teleport the player to the selected recorded ghost's current replay position
+- `/doppel stop` — stop and discard in-memory recordings
 
-## Earlier standalone examples
+The recording window is at most 24,000 ticks (one standard Minecraft day) per character. `next` can be invoked before a full day is recorded; for complete daily tracks, wait until the day ends.
 
-- `src/doppel_npc.cpp`: demonstration-based NPC conversion using scripted human choices.
-- `src/doppel_switch.cpp`: 24-character switching with fixed sample habits.
+### Important limitations
 
-## Roadmap
+- **No real rewind of the world**: block edits, mobs, weather, player inventory and other game state are NOT restored. Only the clock and player's position are reset.
+- Ghosts are armor stands replaying recorded positions, not full player models or intelligent agents.
+- The `select` command teleports the operator; it does not transfer control to a real NPC or suppress the selected ghost.
+- Recordings are held in memory and lost when the server stops or the mod is stopped.
+- Multiplayer, dimension changes, restarts, collisions, death, and chunk loading are not yet robustly handled.
+- No actual AI habit-learning integration yet; the C++ learner is a separate demo.
 
-- Minecraft integration (mod or compatible server API)
-- Persist world state, learned habits, and current playable character
-- Real observations/actions and better behavior imitation
-- Optional continuous tick loop, navigation and inventory systems
+## C++ console prototypes
 
-This simulation models behavior, not subjective consciousness.
+`src/doppel_integrated.cpp`: 24 rounds of simplified habit learning and free switching.
+
+`src/doppel_day_loop.cpp`: deterministic same-day recording and merge simulation.
+
+```bash
+g++ -std=c++17 -O2 src/doppel_integrated.cpp -o doppel
+./doppel
+g++ -std=c++17 -O2 src/doppel_day_loop.cpp -o dayloop
+./dayloop 30
+```
+
+Other demos: `src/doppel_npc.cpp`, `src/doppel_switch.cpp`.
+
+## Next development milestones
+
+1. Build/test the Fabric mod and correct any API mismatches.
+2. Implement reliable bounded-region world snapshots and rollback (including block entities), with safety limits.
+3. Record and replay meaningful actions (movement, mining, placing, interactions), not only positions.
+4. Replace armor stands with controllable NPCs and integrate learned habit policies.
+5. Persist recordings and daily state; reconcile conflicting actions when 24 timelines merge.
+6. Support switching control among all 24 NPCs while the other 23 continue autonomously.
