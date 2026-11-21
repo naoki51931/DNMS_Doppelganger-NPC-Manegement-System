@@ -36,3 +36,17 @@ non-destructive; do not erase journals or personality. Server logs and the
 20-entry in-memory command log should explain failures without exposing private
 memory contents. Do not double-load the generated index into the existing
 brains.
+
+
+## Daily MIP scheduling contract
+
+MIP default schedule is Minecraft **00:00** (tick **18000**), not tick 0.
+The operator can inspect or change it with `/doppel mip time [HH:mm]`.
+Persist the setting in `config/doppelganger/mip.time`. Scheduled integration
+requires MIP ON, an active Doppel session and initialized memory storage.
+Trigger on forward time crossings, at most once per underlying Minecraft day,
+and do not replay missed times after large clock jumps or repeated rewinds.
+Flush individual journals before integration. Manual `/doppel mip run` remains
+available. `/doppel next` and `/doppel stop` flush but do not merge on their
+own. Note that the prototype rewinds the Minecraft clock repeatedly and
+therefore a single Minecraft day ID may cover multiple training loops.
