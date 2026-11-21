@@ -539,6 +539,12 @@ public class DoppelgangerMod implements ModInitializer {
                 long time = world.getTime();
                 if (loopTick % 20 == 0)
                     NaoLifeAI.plan(nao, sharedKnowledge, world, previous, time);
+                if (nao.goal == NaoLifeStore.Goal.COLLECT && loopTick % 100 == 0
+                        && nao.energy >= 20 && NaoWorkPatch.harvest(world, previous, nao)) {
+                    report("Nao " + nao.number + " " + nao.lastOutcome);
+                    if (memories != null) memories.rememberEvent(i, day, loopTick,
+                        "npc_collect", nao.lastOutcome);
+                }
                 HabitBrain.Move move = NaoLifeAI.move(nao, brains, i, loopTick,
                     memories, rewardLearning, sharedKnowledge, previous);
                 Vec3d proposed = HabitBrain.applyMove(previous, move);
