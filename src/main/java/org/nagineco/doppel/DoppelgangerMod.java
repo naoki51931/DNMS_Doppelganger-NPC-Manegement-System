@@ -1,6 +1,7 @@
 package org.nagineco.doppel;
 
 import com.mojang.brigadier.arguments.IntegerArgumentType;
+import com.mojang.brigadier.arguments.StringArgumentType;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
@@ -52,6 +53,10 @@ public class DoppelgangerMod implements ModInitializer {
                 .then(literal("status").executes(c -> status(c.getSource())))
                 .then(literal("select").then(argument("id", IntegerArgumentType.integer(1, 24))
                     .executes(c -> select(c.getSource(), IntegerArgumentType.getInteger(c, "id")))))
+                .then(literal("emotion").then(argument("value", StringArgumentType.word())
+                    .executes(c -> emotion(c.getSource(), StringArgumentType.getString(c, "value")))))
+                .then(literal("reason").then(argument("value", StringArgumentType.word())
+                    .executes(c -> reason(c.getSource(), StringArgumentType.getString(c, "value")))))
                 .then(literal("ai").then(literal("on").executes(c -> ai(c.getSource(), true)))
                     .then(literal("off").executes(c -> ai(c.getSource(), false))))
                 .then(literal("stop").executes(c -> stop(c.getSource())))
@@ -186,7 +191,9 @@ public class DoppelgangerMod implements ModInitializer {
     private static int status(ServerCommandSource src) {
         return say(src, "Day " + day + " | recorded " + tracks.size()
             + "/24 | mode " + (freePlay ? "free-play" : "recording")
-            + " | selected " + (selected+1) + " | AI " + aiMode + " | tick " + loopTick);
+            + " | selected " + (selected+1) + " | AI " + aiMode + " | tick " + loopTick
+            + (brains.isEmpty() ? "" : " | emotion " + brains.get(Math.min(selected, brains.size()-1)).emotion()
+                + " | reason " + brains.get(Math.min(selected, brains.size()-1)).reason()));
     }
 
     private static int stop(ServerCommandSource src) {
@@ -199,6 +206,35 @@ public class DoppelgangerMod implements ModInitializer {
         world = null;
         dawn = null;
         return say(src, "Stopped. Unsaved recordings discarded.");
+    }
+
+    private static int emotion(ServerCommandSource src, String value) {
+        if (!recording || freePlay) return say(src, "Emotion labels are set during training only.");
+        if (!isOwner(src)) return say(src, "Only the training player can label emotions.");
+        try {
+            HabitBrain.Emotion label = HabitBrain.Emotion.valueOf(value.toUpperCase(java.util.Locale.ROOT));
+            brains.get(tracks.size()-1).setEmotion(label);
+            return say(src, "Self-reported emotion: " + label);
+        } catch (IllegalArgumentException ex) {
+            return say(src, "Use neutral, happy, curious, afraid, angry or sad.");
+        }
+    }
+
+    private static int reason(ServerCommandSource src, String value) {
+        if (!recording || freePlay) return say(src, "Reason labels are set during training only.");
+        if (!isOwner(src)) return say(src, "Only the training player can label motivations.");
+        try {
+            HabitBrain.Reason label = HabitBrain.Reason.valueOf(value.toUpperCase(java.util.Locale.ROOT));
+            brains.get(tracks.size()-1).setReason(label);
+            return say(src, "Self-reported reason: " + label);
+        } catch (IllegalArgumentException ex) {
+            return say(src, "Use none, explore, build, collect, safety or social.");
+        }
+    }
+
+    private static boolean isOwner(ServerCommandSource src) {
+        try { return owner != null && owner.equals(src.getPlayerOrThrow().getUuid()); }
+        catch (Exception ex) { return false; }
     }
 
     private static int ai(ServerCommandSource src, boolean enabled) {
