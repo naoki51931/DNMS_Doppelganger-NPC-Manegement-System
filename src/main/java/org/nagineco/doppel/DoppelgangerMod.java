@@ -77,6 +77,71 @@ public class DoppelgangerMod implements ModInitializer {
     private static boolean recording = false;
     private static boolean freePlay = false;
     private static boolean playableAutoMove = false;
+    private static Path snapshotFile() {
+        return FabricLoader.getInstance().getGameDir().resolve("config/doppelganger/recordings.json");
+    }
+    private static void saveSession() throws IOException {
+        if (memories == null) return;
+        memories.flush();
+        RecordingSnapshotStore.save(snapshotFile(), tracks, day, selected, freePlay);
+    }
+    private static int saveCommand(ServerCommandSource src) {
+        if (!recording) return say(src, "No active session to save.");
+        if (!isOwner(src)) return say(src, "Only the playable Nao can save this session.");
+        try {
+            saveSession();
+            return say(src, "Saved session to config/doppelganger/recordings.json");
+        } catch (IOException ex) {
+            return say(src, "Session save failed: " + ex.getMessage());
+        }
+    }
+    private static int resume(ServerCommandSource src) {
+        if (recording) return say(src, "Stop the active session before resuming.");
+        ServerPlayerEntity player;
+        try { player = src.getPlayerOrThrow(); }
+        catch (Exception ex) { return say(src, "Run as an operator player."); }
+        RecordingSnapshotStore.Snapshot snapshot;
+        List<List<Vec3d>> loadedTracks;
+        PersonalityMemoryStore loadedMemories;
+        List<HabitBrain> loadedBrains = new ArrayList<>();
+        try {
+            snapshot = RecordingSnapshotStore.load(snapshotFile());
+            loadedTracks = RecordingSnapshotStore.restoreTracks(snapshot);
+            if (loadedTracks.isEmpty()) return say(src, "Snapshot has no recordings.");
+            loadedMemories = new PersonalityMemoryStore(
+                FabricLoader.getInstance().getGameDir().resolve("config/doppelganger/memories"));
+            for (int i = 0; i < loadedTracks.size(); i++) {
+                HabitBrain brain = new HabitBrain();
+                loadedMemories.restore(i, brain);
+                loadedBrains.add(brain);
+            }
+        } catch (IOException ex) {
+            return say(src, "Could not resume session: " + ex.getMessage());
+        }
+        clearGhosts();
+        tracks.clear();
+        tracks.addAll(loadedTracks);
+        brains.clear();
+        brains.addAll(loadedBrains);
+        memories = loadedMemories;
+        owner = player.getUuid();
+        world = player.getServerWorld();
+        dawn = tracks.get(0).isEmpty() ? player.getBlockPos()
+            : net.minecraft.util.math.BlockPos.ofFloored(tracks.get(0).get(0));
+        day = snapshot.day;
+        selected = snapshot.selected;
+        freePlay = snapshot.freePlay;
+        recording = true;
+        aiMode = true;
+        playableAutoMove = false;
+        loopTick = freePlay ? 0 : Math.min(DAY_TICKS - 1, tracks.get(tracks.size()-1).size());
+        lastAutoTick = -1;
+        resetObservations(player);
+        spawnGhosts();
+        report("Resumed JSON snapshot with " + tracks.size() + " recorded Nao tracks.");
+        return say(src, "Resumed saved session: " + tracks.size() + "/24 tracks, day " + day
+            + ". Automatic movement remains OFF.");
+    }
     private static int lastAutoTick = -1;
     private static boolean lastTickWasAutomatic = false;
 
@@ -168,6 +233,8 @@ public class DoppelgangerMod implements ModInitializer {
             dispatcher.register(literal("doppel")
                 .requires(s -> s.hasPermissionLevel(2))
                 .then(literal("start").executes(c -> start(c.getSource())))
+                .then(literal("save").executes(c -> saveCommand(c.getSource())))
+                .then(literal("resume").executes(c -> resume(c.getSource())))
                 .then(literal("next").executes(c -> next(c.getSource())))
                 .then(literal("status").executes(c -> status(c.getSource())))
                 .then(literal("logs").executes(c -> showReports(c.getSource())))
@@ -302,24 +369,22 @@ public class DoppelgangerMod implements ModInitializer {
                 ghost.refreshPositionAndAngles(pos.x, pos.y, pos.z, ghost.getYaw(), 0);
             }
         }
+        if (loopTick % 1200 == 0) {
+            try { saveSession(); }
+            catch (IOException ex) { report("Periodic JSON save failed: " + ex.getMessage()); }
+        }
         if (freePlay) loopTick = (loopTick + 1) % DAY_TICKS;
         else if (loopTick < DAY_TICKS - 1) loopTick++;
     }
 
     private static int next(ServerCommandSource src) {
-        if (memories != null) {
-            try {
-                memories.flush();
-            } catch (IOException e) {
-                logMIP("Memory flush failed: " + e.getMessage());
-                return say(src, "Failed to save memories: " + e.getMessage());
-            }
-        }
         if (!recording) return say(src, "Start with /doppel start.");
         if (freePlay) {
             day++;
             loopTick = 0;
             world.setTimeOfDay(0);
+            try { saveSession(); }
+            catch (IOException ex) { return say(src, "Day advanced but save failed: " + ex.getMessage()); }
             return say(src, "Day " + day + " started (AI NPC simulation).");
         }
         ServerPlayerEntity player = src.getServer().getPlayerManager().getPlayer(owner);
@@ -334,6 +399,8 @@ public class DoppelgangerMod implements ModInitializer {
         if (finished == CHARACTERS) {
             freePlay = true;
             spawnGhosts();
+            try { saveSession(); }
+            catch (IOException ex) { return say(src, "Training completed but save failed: " + ex.getMessage()); }
             return say(src, "24 recordings completed. Use /doppel select 1..24.");
         }
         tracks.add(new ArrayList<>());
@@ -345,6 +412,8 @@ public class DoppelgangerMod implements ModInitializer {
         }
         brains.add(newBrain);
         spawnGhosts();
+        try { saveSession(); }
+        catch (IOException ex) { return say(src, "Loop advanced but save failed: " + ex.getMessage()); }
         return say(src, "Day " + day + " loop " + (finished+1) + "/24.");
     }
 
@@ -389,13 +458,12 @@ public class DoppelgangerMod implements ModInitializer {
     }
 
     private static int stop(ServerCommandSource src) {
-        if (memories != null) {
-            try {
-                memories.flush();
-            } catch (IOException e) {
-                logMIP("Memory flush failed: " + e.getMessage());
-                return say(src, "Could not save memories: " + e.getMessage());
-            }
+        if (!recording) return say(src, "No active session.");
+        if (!isOwner(src)) return say(src, "Only the playable Nao can stop this session.");
+        try {
+            saveSession();
+        } catch (IOException ex) {
+            return say(src, "Stop cancelled because saving failed: " + ex.getMessage());
         }
         clearGhosts();
         recording = false;
@@ -407,7 +475,7 @@ public class DoppelgangerMod implements ModInitializer {
         owner = null;
         world = null;
         dawn = null;
-        return say(src, "Stopped. Unsaved recordings discarded.");
+        return say(src, "Stopped and saved. Resume with /doppel resume.");
     }
 
     private static int mipStatus(ServerCommandSource src) {
