@@ -9,9 +9,9 @@ public final class NaoCooperationPatch {
     public static final String PLAN = "STOCKPILE_LOGS";
     public static String role(NaoLifeStore.Nao nao) {
         if (nao.energy < 20) return "REST";
-        if (nao.collection >= nao.exploration && nao.collection >= nao.building) return "GATHER";
-        if (nao.building > nao.collection) return "BUILDER";
-        return "SCOUT";
+        if (nao.building > nao.collection && nao.building > nao.exploration) return "BUILDER";
+        if (nao.collection > nao.exploration && nao.collection > nao.building) return "GATHER";
+        return switch (nao.number % 3) { case 0 -> "BUILDER"; case 1 -> "SCOUT"; default -> "GATHER"; };
     }
     public static boolean transfer(NaoLifeStore.Nao sender, NaoLifeStore.Nao receiver) {
         if (sender == receiver || sender.inventory == null || receiver.inventory == null) return false;
