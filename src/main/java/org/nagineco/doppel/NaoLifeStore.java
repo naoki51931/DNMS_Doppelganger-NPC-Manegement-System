@@ -23,6 +23,8 @@ public final class NaoLifeStore {
         public Map<String, Integer> goalAttempts = new HashMap<>();
         public String lastAction = "NONE";
         public String lastOutcome = "NONE";
+        /** Appearance identifier, not an authenticated Mojang profile or rendered skin. */
+        public String skinKey = "nao/default";
     }
     private static final Gson GSON = new Gson();
     private final Path file;
@@ -41,6 +43,9 @@ public final class NaoLifeStore {
                 if (n.inventory == null) n.inventory = new HashMap<>();
                 if (n.goalRewards == null) n.goalRewards = new HashMap<>();
                 if (n.goalAttempts == null) n.goalAttempts = new HashMap<>();
+                if (n.skinKey == null || n.skinKey.isBlank()) n.skinKey = "nao/default";
+                try { new org.nagineco.doppel.appearance.NaoAppearanceRegistry.NaoAppearance(n.number, UUID.fromString(n.id), n.skinKey, true); }
+                catch (IllegalArgumentException ex) { throw new IOException("Invalid Nao appearance or UUID", ex); }
                 members.add(n);
             }
         } catch (RuntimeException ex) { throw new IOException("Malformed Nao identities", ex); }
@@ -54,6 +59,11 @@ public final class NaoLifeStore {
             members.add(n);
         }
         return members.get(index);
+    }
+    public org.nagineco.doppel.appearance.NaoAppearanceRegistry appearanceRegistry() {
+        org.nagineco.doppel.appearance.NaoAppearanceRegistry registry = new org.nagineco.doppel.appearance.NaoAppearanceRegistry();
+        for (Nao n : members) registry.ensure(n.number, UUID.fromString(n.id), n.skinKey);
+        return registry;
     }
     public int count() { return members.size(); }
     public Nao get(int index) { return members.get(index); }
