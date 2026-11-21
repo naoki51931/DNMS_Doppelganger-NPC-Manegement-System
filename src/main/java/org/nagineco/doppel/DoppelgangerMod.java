@@ -839,6 +839,7 @@ public class DoppelgangerMod implements ModInitializer {
     private static int next(ServerCommandSource src) {
         if (!recording) return say(src, "Start with /doppel start.");
         if (freePlay) {
+            integrateMidnightBeforeReset();
             try { saveSession(); }
             catch (IOException ex) { return say(src, "Day not advanced because save failed: " + ex.getMessage()); }
             day++;
@@ -848,6 +849,7 @@ public class DoppelgangerMod implements ModInitializer {
         }
         ServerPlayerEntity player = src.getServer().getPlayerManager().getPlayer(owner);
         if (player == null) return say(src, "Owner is offline.");
+        integrateMidnightBeforeReset();
         // Default: clock + owner position only; bounded block rewind requires opt-in.
         if (regionRollbackEnabled && regionSnapshot != null) {
             try { regionSnapshot.restore(); }
@@ -886,12 +888,19 @@ public class DoppelgangerMod implements ModInitializer {
     }
 
     private static void spawnGhosts() {
-        clearGhosts();
+        // Preserve existing living stand-ins and their world positions across
+        // training-loop growth; only create the newly required slots.
         int count = freePlay ? tracks.size() : tracks.size() - 1;
+        while (ghosts.size() > count) {
+            ArmorStandEntity surplus = ghosts.remove(ghosts.size() - 1);
+            if (!surplus.isRemoved()) surplus.discard();
+        }
         for (int i = 0; i < count; i++) {
+            if (i < ghosts.size() && !ghosts.get(i).isRemoved()) continue;
             ArmorStandEntity stand = new ArmorStandEntity(EntityType.ARMOR_STAND, world);
-            Vec3d pos = tracks.get(i).isEmpty()
-                ? Vec3d.ofCenter(dawn) : tracks.get(i).get(0);
+            Vec3d pos = i < ghosts.size() && ghosts.get(i).isRemoved()
+                ? ghosts.get(i).getPos()
+                : (tracks.get(i).isEmpty() ? Vec3d.ofCenter(dawn) : tracks.get(i).get(0));
             stand.refreshPositionAndAngles(pos.x, pos.y, pos.z, 0, 0);
             stand.setNoGravity(true);
             stand.setInvulnerable(true);
@@ -905,7 +914,8 @@ public class DoppelgangerMod implements ModInitializer {
             stand.setCustomName(Text.literal("Doppel " + (i+1)));
             stand.setCustomNameVisible(true);
             world.spawnEntity(stand);
-            ghosts.add(stand);
+            if (i < ghosts.size()) ghosts.set(i, stand);
+            else ghosts.add(stand);
         }
     }
 
@@ -1026,6 +1036,21 @@ public class DoppelgangerMod implements ModInitializer {
             } catch (IOException ex) {
                 logMIP("Daily integration failed: " + ex.getMessage());
             }
+        }
+    }
+
+    private static void integrateMidnightBeforeReset() {
+        // A training loop resets the Minecraft clock at 06:00, so integrate
+        // at the 00:00 boundary of that loop even if the operator advances
+        // before a natural midnight tick. Never change the sample weights.
+        if (!mipEnabled || memories == null) return;
+        try {
+            memories.flush();
+            logMIP("Training-loop midnight (00:00): "
+                + MemoryIntegrationPatch.integrate(memories.directory()));
+            if (sharedKnowledge != null) sharedKnowledge.refresh();
+        } catch (IOException ex) {
+            logMIP("Training-loop midnight integration failed: " + ex.getMessage());
         }
     }
 
