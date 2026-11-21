@@ -1,5 +1,13 @@
 # Player Appearance Patch (PAP) — phase 1
 
+## Phase 2 integration (2026-11-21)
+
+- `build.gradle` now compiles the PAP source directory.
+- `NaoLifeStore.Nao` persists a `skinKey` field in `nao_lives.json`; missing keys from older saves default to `nao/default`.
+- `NaoLifeStore.load()` validates UUID syntax and appearance keys; `appearanceRegistry()` constructs a validated 24-slot registry using existing logical UUIDs.
+- `DoppelgangerMod.initializeLife()` validates that registry before saving.
+- This **does not** replace armor stands or implement player-model rendering. Java 21 / Fabric build and runtime remain unverified.
+
 ## Current implementation
 `NaoAppearanceRegistry` tracks 1–24 stable logical NPC UUIDs, a validated skin reference key, and active state. It rejects duplicate slots/UUIDs and restores snapshots atomically. The source is plain Java 21 and intentionally independent of Fabric/Yarn mapping changes.
 
