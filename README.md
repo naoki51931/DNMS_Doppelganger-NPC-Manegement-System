@@ -307,3 +307,16 @@ The opt-in `/doppel life on` NPC layer now has per-Nao goal persistence (`goalUn
 The separate `patches/nao-growth/` source module is included in `build.gradle`. During an active training session, the Minecraft clock triggers **one** additional Nao per day, maximum 24, using the existing `/doppel next` progression and checkpoint logic. There is **no doubling**. Configure with `/doppel growth time HH:mm`; inspect with `/doppel growth status`. The setting persists in `config/doppelganger/growth.time`. Default **06:00 Minecraft time (tick 0, start of the training day)**, not the real-world wall clock. The first Nao is created by `/doppel start`. A clock crossing is required to add the next Nao, so the first automatic addition occurs at the following day's start; a manual `/doppel next` remains available. The feature stops adding individuals once 24 tracks exist or free-play begins.
 
 **Important caveats:** Auto-growth currently calls the existing training transition, which teleports the owner to the training origin, rewinds the Minecraft day to 0, resets observation state, and saves a checkpoint. It does **not** merely spawn a non-disruptive independent NPC. Manual time jumps and server restarts are not backfilled. Auto-growth uses the world time, not a wall-clock timestamp. The trigger and checkpoint integration have not been build-tested or run in Minecraft. The schedule does not change the single shared personality or the independent personal journals.
+
+
+### Confirmed growth/rewind specification (2026-11-21)
+
+**User-approved behavior (intentional, not a defect):** Each scheduled Nao addition reuses `/doppel next`. The playable **outer Nao** is teleported back to the training origin, the Minecraft clock is reset to 06:00 (world tick 0), and the training observation anchor is reset. This rewind is **deliberate** and MUST NOT be removed as a bug fix without explicit approval. Changes to the world (terrain, blocks, constructions) are not rolled back.
+
+- Growth is strictly **one Nao at a time**, never doubling, up to 24.
+- The outer Nao's initial creation is via `/doppel start`; scheduled growth follows at the configured Minecraft time, default 06:00 (start of day).
+- Configure with `/doppel growth time HH:mm`; inspect with `/doppel growth status`. The persisted setting is `config/doppelganger/growth.time`.
+- Existing Nao identities and journals remain; the newly added Nao gets an individual identity, skills and goals, while the personality and integrated memory are shared.
+- Keep the established `/doppel next` checkpoint/save semantics and rewind behavior. Manual `/doppel next` is also allowed.
+- Important implementation limitation: scheduling uses Minecraft world time and detects ordinary clock crossings. Clock rewinds/time jumps do not trigger retroactive growth. At the default 06:00, the automatic trigger requires a later crossing of tick 0; it does not immediately fire when `/doppel start` resets time to tick 0.
+- Do not describe the rewind as undesirable or propose non-disruptive spawning as the agreed next task. The next planned work is actual individual skill learning and world actions (collect/build), subject to armor-stand limitations and build/runtime verification.
