@@ -1,4 +1,4 @@
-# AGENTS.md — Memory Integration Patch
+# AGENTS.md — Memory Integration Patch — DNMS
 
 ## Scope
 
