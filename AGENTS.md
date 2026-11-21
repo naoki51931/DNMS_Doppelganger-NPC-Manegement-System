@@ -213,3 +213,27 @@ When `/doppel life on` is active, an NPC with the COLLECT goal attempts to harve
 
 ### Stage 8: RLP extension for Nao life goals (2026-11-21)
 The existing Reward Learning Patch toggle (`/doppel reward on|off`) now also gates per-Nao goal-reward updates. New `NaoRlpPatch.java` maintains bounded incremental mean reward estimates in `NaoLifeStore.Nao.goalRewards` and `goalAttempts`, persisted in `nao_lives.json` with backwards-compatible initialization. Successful log harvest: COLLECT +5; EXPLORE successful movement +1 or blocked movement -1 (sampled every 20 ticks); successful nearby resource transfer: SOCIAL +3 for both participants. `NaoLifeAI.chooseGoal` uses individual reward estimates in goal scoring, while retaining MIP shared evidence and skills. This is **goal-level online reward estimation, not Q-learning or neural-network training**; BUILD is not rewarded because actual building is not implemented. Existing RLP movement rewards and MIP remain in place. Deferred building protection and pathfinding remain deferred. Code has not been compiled or tested in Minecraft.
+
+
+## Seven-feature baseline implementation status (2026-11-21)
+
+This is a **partial foundation**, not seven completed Minecraft features. The user requested batching feature work and fixing build errors at milestones rather than after every small commit. The last user-confirmed green GitHub Actions build was commit `7c46db9`; **changes after that are not verified by CI or in-game**.
+
+| Requested feature | Current baseline | Still missing / uncorrected |
+| --- | --- | --- |
+| 24 visually authentic player NPCs | Stable 24 UUIDs, `skinKey`, appearance commands, vanilla player-head mannequin with limb animation ON by default | **Still armor stands**. Dedicated humanoid entity, Fabric client renderer, actual player skin loading, entity animations and chunk lifecycle missing |
+| Mining, building, item collection learning | `NaoActionLearning` confidence model; `NaoLifeStore` persists per-Nao action attempts/successes; actual NPC log collection now records attempts and outcomes | Mining diverse blocks, real construction/placing, craft and inventory fidelity, safe building protection, pathfinding, demonstration capture and real learned action selection missing. Current log harvesting is potentially destructive; back up worlds |
+| Conversation, romance, relationships | `NaoRelationshipEngine` directed relationships, mutual romance opt-in guard, `NaoSocialStore` JSON persistence, `/doppel social talk <from> <to>` and `/doppel social status <from> <to>` | Autonomous conversations, language generation, real dialogue UI, autonomous relationship dynamics, explicit romance opt-in command/UI and relationship checkpoint integration missing. Manual talk event is **not** a conversation |
+| Full Minecraft world rewind | `NaoWorldRollbackPlan` opt-in policy and bounded journal contract (pure Java, not connected) | **No world rollback**. Block entity NBT, entities, player inventories, chunks, dimensions, other players, durable snapshots, consistency and atomic restore missing. `FULL_WORLD` explicitly rejects activation. Default remains clock + outer player's position |
+| Fully control any of 24 | `NaoControlSession` validated selection state machine (not connected); existing `/doppel select` teleports | Input ownership, network packets, entity/player substitution, inventory and camera control, suspending selected AI and resuming owner missing. **No real possession** |
+| Advanced decisions directly from integrated memory | Existing `SharedMemoryReader` reads integrated structured events, supports nearest-experience and evidence-based goal scoring in `NaoLifeAI` | Semantic retrieval, planning with actions and outcomes, causal evaluation, robust spatial memory, integrated decision audit and quality evaluation missing |
+| Personality growth from experience | `NaoPersonalityGrowth` generates bounded, evidence-backed suggestions after >=10 observations | Not connected to live events or persistence/approval UI. **Never silently rewrite authoritative `nao_personality.md`**; owner review and approval workflow missing |
+
+### Baseline technical details
+
+- `NaoActionLearning`: bounded per-action success counts and Laplace-smoothed confidence; the persisted adapter is `NaoLifeStore.actionAttempts/actionSuccesses`. The collection AI records observed harvest outcomes. No causal proof is inferred from unrelated inventory deltas.
+- `NaoSocialStore`: writes `config/doppelganger/nao_social.json` using a temporary file. It is saved during session checkpoints and after manual talk, but **not** included in generation checkpoint restore, so checkpoint rollback consistency is incomplete.
+- `NaoControlSession`, `NaoWorldRollbackPlan`, `NaoPersonalityGrowth`: standalone validated core models, **not** Minecraft-integrated behavior.
+- Mannequin walking animation is **ON by default**, persists an explicit OFF choice in `config/doppelganger/mannequin-animation.enabled`. Do not flip the default.
+- Existing `/doppel select` is a teleport only. Avoid presenting it as NPC possession.
+- Never claim build success for these commits without an actual CI result. The newly added core model tests run in `gradle clean build`; batch subsequent compilation fixes.
