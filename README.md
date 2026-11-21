@@ -116,3 +116,33 @@ From the repository root:
 javac -d patches/memory-integration/out patches/memory-integration/src/org/nagineco/patch/memoryintegration/MemoryIntegrationPatch.java
 java -cp patches/memory-integration/out org.nagineco.patch.memoryintegration.MemoryIntegrationPatch config/doppelganger/memories
 ```
+
+
+### MIP automatic mode (default ON)
+
+The Memory Integration Patch is compiled into the Fabric mod by `build.gradle`.
+When `/doppel start` initializes the memory store, MIP automatically generates
+`nao_integrated_memory.md`. After each `/doppel next` or `/doppel stop`,
+the mod flushes individual journals and re-generates the integrated index.
+These operations log to the server console by default.
+
+Operator commands:
+
+```mcfunction
+/doppel mip status
+/doppel mip logs
+/doppel mip run
+/doppel mip off
+/doppel mip on
+```
+
+`off` disables automatic integration without deleting individual memories.
+`on` persists the setting and integrates immediately when memory storage is
+initialized. The toggle persists at `config/doppelganger/mip.enabled`;
+if absent, MIP defaults to ON. `run` requires MIP to be ON.
+
+Logs are emitted to the server console and the last 20 messages can be
+retrieved using `/doppel mip logs`. This is not a per-event debug log.
+The patch is still a structured Markdown integration utility, **not** a live
+semantic memory reader: NPC decision code does not yet consume the integrated
+index. Build and Minecraft runtime remain unverified.
