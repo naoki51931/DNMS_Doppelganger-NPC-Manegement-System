@@ -6,7 +6,8 @@
 
 // Standalone prototype: deterministic one-day rewind and 24 recorded timelines.
 // Minecraft world snapshots, real input and server ticks need a mod/API adapter.
-constexpr int PEOPLE=24, TICKS_PER_DAY=12, WORLD_WIDTH=16;
+constexpr int INITIAL_NAOS=24, MAX_NAOS=256, TICKS_PER_DAY=12, WORLD_WIDTH=16;
+constexpr int PEOPLE=INITIAL_NAOS; // Initial training prototype
 enum class Action { Wait, Left, Right, Chop };
 struct Actor { int x=0, wood=0; };
 struct World { std::array<Actor,PEOPLE> actors{}; std::array<bool,WORLD_WIDTH> trees{}; int day=1; };
