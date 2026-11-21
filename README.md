@@ -27,7 +27,9 @@ Copy the generated `build/libs/doppelganger-npc-system-0.1.0.jar` into a compati
 - `/doppel preference explore 9` — set shared Nao personality affinity for a reason from 0 to 10 (also: `none`, `build`, `collect`, `safety`, `social`)
 - `/doppel ai on` — use learned movement habits for autonomous NPC movement (default)
 - `/doppel ai off` — switch to exact recorded-position replay
-- `/doppel stop` — stop and discard in-memory recordings
+- `/doppel stop` — save recordings to JSON and stop the session (does not discard recordings)
+- `/doppel save` — explicitly save the active session to JSON
+- `/doppel resume` — restore a saved session from JSON
 
 The recording window is at most 24,000 ticks (one standard Minecraft day) per character. `next` can be invoked before a full day is recorded; for complete daily tracks, wait until the day ends.
 
@@ -43,7 +45,7 @@ The recording window is at most 24,000 ticks (one standard Minecraft day) per ch
 - The Markdown files are a readable structured journal, **not** an LLM memory retrieval system. Only structured movement samples are parsed for decisions. Free-form notes are not yet interpreted.
 - Recorded movement observations are sampled every 20 ticks (approximately once per second); only samples flushed to disk are durable. The stand-ins are not real controllable player entities.
 - The `select` command teleports the operator; it does not transfer control to a real NPC or suppress the selected ghost.
-- Recorded position tracks are held in memory and lost when the server stops. However, sampled movement observations and their player-labeled emotions/reasons are appended to individual Markdown journals on `/doppel next` and `/doppel stop`, and are reloaded into the learner on `/doppel start`. A crash before flushing may lose recent samples.
+- Recorded position tracks are held in memory while active and are persisted in `config/doppelganger/recordings.json` on `/doppel stop`, `/doppel next`, `/doppel save`, and periodic checkpoints (every 1200 ticks). Abrupt crashes may still lose changes since the last successful save. However, sampled movement observations and their player-labeled emotions/reasons are appended to individual Markdown journals on `/doppel next` and `/doppel stop`, and are reloaded into the learner on `/doppel start`. A crash before flushing may lose recent samples.
 - Multiplayer, dimension changes, restarts, collisions, death, and chunk loading are not yet robustly handled.
 - Basic movement imitation is integrated in the Fabric mod; the richer C++ learner remains a separate demo.
 
@@ -197,3 +199,9 @@ The opt-in [Automatic Movement Patch](patches/automatic-movement/README.md) lets
 - **Self-training prevention:** While `/doppel automove on` is active, generated player movement is excluded from `HabitBrain.observe` and the structured movement journal, preventing an automatic movement feedback loop. Other directly observed events (inventory and health) remain available. Manual training resumes after `/doppel automove off`.
 - **Safer movement:** AMP now requires grounded movement, checks the destination player's collision box, verifies support underfoot, and rejects fluid destinations. These are conservative safeguards, **not full pathfinding or guaranteed fall protection**. Avoid testing near cliffs or hazardous terrain until verified.
 - Fabric 1.21.1 build and runtime have not yet been validated.
+
+## JSON recording persistence
+
+The Fabric mod saves all recorded Nao movement tracks, current day, selected Nao and free-play state to `config/doppelganger/recordings.json`. The file is written through a temporary file followed by a replacement move to reduce partial writes. `/doppel stop` saves before clearing in-memory data and refuses to stop if the save fails. `/doppel save` forces a checkpoint; `/doppel resume` reloads saved tracks and restores each Nao's learned model from its existing Markdown journal. `/doppel start` begins a **new** session and may replace the previous snapshot at the next save; use `resume` to continue an existing session. Snapshots also occur every 1200 ticks during active sessions and on `/doppel next`.
+
+The JSON snapshot does not include the entire Minecraft world, NPC entities, inventories or a complete rewind. After resume, ghost stand-ins are recreated from tracks, automatic movement defaults OFF, and movement habits are restored from Markdown (not from a serialized in-memory brain). Crash recovery is limited to the last successful checkpoint. Build and Minecraft runtime are still unverified.
