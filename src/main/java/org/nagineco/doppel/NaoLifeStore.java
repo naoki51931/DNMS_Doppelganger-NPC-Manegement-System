@@ -25,6 +25,9 @@ public final class NaoLifeStore {
         public String lastOutcome = "NONE";
         /** Appearance identifier, not an authenticated Mojang profile or rendered skin. */
         public String skinKey = "nao/default";
+        /** Per-individual action evidence; not a separate personality. */
+        public Map<String, Integer> actionAttempts = new HashMap<>();
+        public Map<String, Integer> actionSuccesses = new HashMap<>();
     }
     private static final Gson GSON = new Gson();
     private final Path file;
@@ -43,6 +46,8 @@ public final class NaoLifeStore {
                 if (n.inventory == null) n.inventory = new HashMap<>();
                 if (n.goalRewards == null) n.goalRewards = new HashMap<>();
                 if (n.goalAttempts == null) n.goalAttempts = new HashMap<>();
+                if (n.actionAttempts == null) n.actionAttempts = new HashMap<>();
+                if (n.actionSuccesses == null) n.actionSuccesses = new HashMap<>();
                 if (n.skinKey == null || n.skinKey.isBlank()) n.skinKey = "nao/default";
                 try { new org.nagineco.doppel.appearance.NaoAppearanceRegistry.NaoAppearance(n.number, UUID.fromString(n.id), n.skinKey, true); }
                 catch (IllegalArgumentException ex) { throw new IOException("Invalid Nao appearance or UUID", ex); }
@@ -77,6 +82,21 @@ public final class NaoLifeStore {
             try { Files.move(temp, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING); }
             catch (AtomicMoveNotSupportedException ex) { Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING); }
         } finally { Files.deleteIfExists(temp); }
+    }
+    public void observeAction(int index, NaoActionLearning.Action action, boolean succeeded) {
+        Nao n = ensure(index);
+        String key = action.name();
+        int attempts = n.actionAttempts.getOrDefault(key, 0);
+        int successes = n.actionSuccesses.getOrDefault(key, 0);
+        if (attempts >= 100000) return;
+        n.actionAttempts.put(key, attempts + 1);
+        if (succeeded) n.actionSuccesses.put(key, Math.min(attempts + 1, successes + 1));
+    }
+    public double actionConfidence(int index, NaoActionLearning.Action action) {
+        Nao n = ensure(index);
+        String key = action.name();
+        return (n.actionSuccesses.getOrDefault(key, 0) + 1.0)
+            / (n.actionAttempts.getOrDefault(key, 0) + 2.0);
     }
     public void learn(int index, Goal goal) {
         Nao n = ensure(index);
