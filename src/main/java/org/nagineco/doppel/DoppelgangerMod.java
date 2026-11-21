@@ -553,6 +553,8 @@ public class DoppelgangerMod implements ModInitializer {
             return say(src, "Failed to load next Nao memory: " + e.getMessage());
         }
         brains.add(newBrain);
+        try { if (life != null) { life.ensure(tracks.size() - 1); life.save(); } }
+        catch (IOException ex) { return say(src, "Nao identity save failed: " + ex.getMessage()); }
         spawnGhosts();
         try { saveSession(); }
         catch (IOException ex) { return say(src, "Loop advanced but save failed: " + ex.getMessage()); }
