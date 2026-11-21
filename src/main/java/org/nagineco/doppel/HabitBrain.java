@@ -20,6 +20,12 @@ public final class HabitBrain {
     private Emotion emotion = Emotion.NEUTRAL;
     private Reason reason = Reason.NONE;
     private int samples = 0;
+    private final double[][][][] rewards =
+        new double[2][Emotion.values().length][Reason.values().length][Move.values().length];
+    private Move lastManualMove = null;
+    private Emotion lastManualEmotion = Emotion.NEUTRAL;
+    private Reason lastManualReason = Reason.NONE;
+    private int lastManualDayPart = 0;
 
     public void setEmotion(Emotion value) { emotion = value; }
     public void setReason(Reason value) { reason = value; }
@@ -30,6 +36,7 @@ public final class HabitBrain {
     public void resetObservationAnchor(Vec3d position) {
         observations.clear();
         observations.add(position);
+        lastManualMove = null;
     }
 
     public void observe(Vec3d position) {
@@ -40,7 +47,26 @@ public final class HabitBrain {
         int dayPart = ((observations.size() - 1) % 24000) >= 12000 ? 1 : 0;
         counts[dayPart][emotion.ordinal()][reason.ordinal()][move.ordinal()]++;
         samples++;
+        lastManualMove = move;
+        lastManualEmotion = emotion;
+        lastManualReason = reason;
+        lastManualDayPart = dayPart;
     }
+
+    /** Reward only the last manually observed movement, never an AMP-generated move. */
+    public void rewardLatestMove(int tick, double value) {
+        if (lastManualMove == null || !Double.isFinite(value)) return;
+        learnReward(lastManualMove, lastManualEmotion, lastManualReason, lastManualDayPart, value);
+    }
+
+    public void learnReward(Move move, Emotion e, Reason r, int part, double value) {
+        if (Double.isFinite(value)) rewards[part][e.ordinal()][r.ordinal()][move.ordinal()] += Math.max(-20, Math.min(20, value));
+    }
+
+    public Move lastManualMove() { return lastManualMove; }
+    public Emotion lastManualEmotion() { return lastManualEmotion; }
+    public Reason lastManualReason() { return lastManualReason; }
+    public int lastManualDayPart() { return lastManualDayPart; }
 
     private static Move classify(Vec3d delta) {
         double x = delta.x, z = delta.z;
@@ -85,6 +111,12 @@ public final class HabitBrain {
      */
     public static Move sharedDecision(List<HabitBrain> all, int characterIndex,
                                       int dayTick, PersonalityMemoryStore personality) {
+        return sharedDecision(all, characterIndex, dayTick, personality, false);
+    }
+
+    public static Move sharedDecision(List<HabitBrain> all, int characterIndex,
+                                      int dayTick, PersonalityMemoryStore personality,
+                                      boolean rewardEnabled) {
         if (all.isEmpty()) return Move.STAY;
         int part = dayTick >= 12000 ? 1 : 0;
         double[] scores = new double[Move.values().length];
@@ -97,7 +129,7 @@ public final class HabitBrain {
                 for (Emotion emotion : Emotion.values()) {
                     int[] observed = brain.counts[part][emotion.ordinal()][reason.ordinal()];
                     for (int m = 0; m < scores.length; m++) {
-                        scores[m] += observed[m] * affinity * individualBoost;
+                        scores[m] += (observed[m] + (rewardEnabled ? brain.rewards[part][emotion.ordinal()][reason.ordinal()][m] : 0)) * affinity * individualBoost;
                     }
                 }
             }
