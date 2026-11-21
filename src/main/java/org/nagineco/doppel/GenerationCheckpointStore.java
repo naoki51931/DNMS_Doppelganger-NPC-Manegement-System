@@ -33,9 +33,13 @@ public final class GenerationCheckpointStore {
         return generation;
     }
     public static void publish(Path root, Path json, Path memories, Path playerState, Path lifeState) throws IOException {
-        publish(root, json, memories, playerState, lifeState, null);
+        publish(root, json, memories, playerState, lifeState, null, null);
     }
     public static void publish(Path root, Path json, Path memories, Path playerState, Path lifeState, Path socialState) throws IOException {
+        publish(root, json, memories, playerState, lifeState, socialState, null);
+    }
+    public static void publish(Path root, Path json, Path memories, Path playerState,
+                               Path lifeState, Path socialState, Path peopleState) throws IOException {
         Files.createDirectories(root);
         String id = String.format(java.util.Locale.ROOT, "generation_%016d", System.nanoTime() & Long.MAX_VALUE);
         Path generation = root.resolve(id);
@@ -48,6 +52,7 @@ public final class GenerationCheckpointStore {
         if (playerState != null) Files.copy(playerState, generation.resolve("player.json"));
         if (lifeState != null) Files.copy(lifeState, generation.resolve("nao_lives.json"));
         if (socialState != null) Files.copy(socialState, generation.resolve("nao_social.json"));
+        if (peopleState != null) Files.copy(peopleState, generation.resolve("people.json"));
         Files.writeString(generation.resolve("COMPLETE"), "v1\n", StandardCharsets.UTF_8);
         Path temp = root.resolve("CURRENT.tmp");
         try {
@@ -62,9 +67,13 @@ public final class GenerationCheckpointStore {
     }
     public static void restoreMemories(Path generation, Path target) throws IOException {
         Files.createDirectories(target);
-        for (String name : MEMORY_FILES)
-            if (Files.isRegularFile(generation.resolve("memories").resolve(name)))
-                Files.copy(generation.resolve("memories").resolve(name), target.resolve(name),
-                    StandardCopyOption.REPLACE_EXISTING);
+        for (String name : MEMORY_FILES) {
+            Path source = generation.resolve("memories").resolve(name);
+            Path destination = target.resolve(name);
+            if (Files.isRegularFile(source))
+                Files.copy(source, destination, StandardCopyOption.REPLACE_EXISTING);
+            else Files.deleteIfExists(destination);
+        }
+        Files.deleteIfExists(target.resolve("nao_integrated_memory.md"));
     }
 }
