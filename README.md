@@ -324,3 +324,12 @@ The separate `patches/nao-growth/` source module is included in `build.gradle`. 
 
 ### Stage 5 limited harvesting (2026-11-21)
 When `/doppel life on` is active, an NPC with the COLLECT goal attempts to harvest one exposed nearby log every 100 loop ticks (at most 4 blocks from its position, up to 64 stored units, energy >= 20). Only oak, birch, spruce, jungle, acacia, dark oak, mangrove, and cherry logs are eligible. `NaoWorkPatch` directly replaces the log with air and credits one item to that Nao's individual JSON inventory in `nao_lives.json`, increments collection skill, consumes energy, and emits a `npc_collect` memory event. No world item entity is dropped, no player tools, loot tables, block hardness, claims/permissions, natural-tree verification or protected-build detection are implemented. **Important: exposed logs in player buildings are NOT protected.** This is an experimental destructive action; test in a disposable world or backup first. No building or cooperative action has been implemented. Existing one-by-one growth and intentional rewind remain unchanged. Build/runtime testing has not been performed.
+
+
+### Deferred implementation (explicit user decision, 2026-11-21)
+
+**Implement later, not in the current stage:**
+1. **Player-build protection / safe harvesting**: distinguish naturally occurring harvestable logs from player-placed building blocks, enforce protected areas or permissions, and prevent destructive harvesting of structures.
+2. **Pathfinding to harvest targets**: navigate safely around obstacles to reach logs instead of relying only on nearby-target checks.
+
+These two features are **not implemented** and are deliberately deferred. Do not present them as working or silently add them to the current harvesting patch. The existing limited `NaoWorkPatch` can still remove exposed logs from buildings; use only backed-up test worlds until protection is implemented. Revisit protection first, then pathfinding, when the user requests the deferred work.
