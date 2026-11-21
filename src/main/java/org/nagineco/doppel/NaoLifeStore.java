@@ -11,6 +11,15 @@ public final class NaoLifeStore {
     public enum Goal { EXPLORE, COLLECT, BUILD, REST, SOCIAL, SAFETY }
     public static final class Nao {
         public String id;
+        /** Persistent roleplay-life profile; separate from shared personality. */
+        public String occupation = "EXPLORER";
+        public String longTermGoal = "DISCOVER";
+        public String residence = "SPAWN";
+        public int workStart = 9, workEnd = 17;
+        public String lifeStage = "ADULT";
+        public Map<String, String> personalRelationships = new HashMap<>();
+        public long lastRoutineDay = Long.MIN_VALUE;
+        public long lastRelationshipDay = Long.MIN_VALUE;
         public int number;
         public Goal goal = Goal.EXPLORE;
         public int exploration, collection, building, social;
@@ -46,6 +55,11 @@ public final class NaoLifeStore {
             for (Nao n : data) {
                 if (n == null || n.id == null || n.goal == null || n.number != members.size()+1
                     || !ids.add(n.id)) throw new IOException("Invalid or duplicated Nao identity");
+                if (n.occupation == null) n.occupation = "EXPLORER";
+                if (n.longTermGoal == null) n.longTermGoal = "DISCOVER";
+                if (n.residence == null) n.residence = "SPAWN";
+                if (n.lifeStage == null) n.lifeStage = "ADULT";
+                if (n.personalRelationships == null) n.personalRelationships = new HashMap<>();
                 if (n.inventory == null) n.inventory = new HashMap<>();
                 if (n.goalRewards == null) n.goalRewards = new HashMap<>();
                 if (n.goalAttempts == null) n.goalAttempts = new HashMap<>();
