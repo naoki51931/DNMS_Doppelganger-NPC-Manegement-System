@@ -1,5 +1,20 @@
 # Memory Integration Patch — DNMS
 
+<!-- DNMS_PATCH_BILINGUAL_CURRENT_BEGIN -->
+
+## 日本語ガイド（現行仕様）
+MIPは24人の個別記憶 `nao_01.md`～`nao_24.md` と唯一の共通人格 `nao_personality.md` を読み、由来を残した共有索引 `nao_integrated_memory.md` を生成します。元ファイルは上書きしません。同一奈央内の重複は除去しますが、異なる奈央の同じ経験は区別します。Java 21の単独CLIとして実行でき、現在はFabric MODにも組み込まれています。
+MIPは初期ONで、`/doppel mip on|off|run|status|logs` と `/doppel mip time HH:mm` を使用します。時刻はMinecraft内の時計で、初期値は00:00（tick 18000）。設定は `config/doppelganger/mip.enabled` と `mip.time` に保存されます。時刻の飛び越しや再開時には可能な範囲で未処理統合を試行し、完了キーで重複を抑えます。`/doppel next` も次のループへ進む前に未処理の統合を試みます。完全なトランザクション保証はありません。
+共有索引は実験的なNPC生活AIが構造化された経験検索に利用します。自由文を理解するLLMや感情認識ではありません。記憶には位置やプレイヤー入力ラベルが含まれるため、サーバーデータを保護してください。
+
+## English Guide (Current Behavior)
+MIP reads 24 distinct `nao_01.md`–`nao_24.md` journals and the sole shared `nao_personality.md`, generating an attributed `nao_integrated_memory.md` index without overwriting sources. Identical events within one journal are deduplicated; identical events belonging to different Naos remain distinct. The Java 21 standalone CLI remains available, and the patch is also compiled into the Fabric mod.
+MIP defaults to ON. Use `/doppel mip on|off|run|status|logs` and `/doppel mip time HH:mm`. The default Minecraft time is 00:00 (tick 18000); settings persist in `mip.enabled` and `mip.time`. Missed crossings and resumed sessions trigger best-effort catch-up, with a completion marker suppressing duplicate merges. `/doppel next` also attempts pending integration. The process is not fully transactional.
+Experimental NPC life AI can query structured events in the shared index. This is not an LLM, semantic free-text understanding or emotion detection. Protect journals containing locations and player-provided labels.
+
+<!-- DNMS_PATCH_BILINGUAL_CURRENT_END -->
+
+
 **Status:** standalone Java 21 patch / offline tool. Not automatically loaded by Fabric.
 
 ## Purpose
