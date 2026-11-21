@@ -137,6 +137,7 @@ public class DoppelgangerMod implements ModInitializer {
         loopTick = freePlay ? 0 : Math.min(DAY_TICKS - 1, tracks.get(tracks.size()-1).size());
         lastAutoTick = -1;
         resetObservations(player);
+        if (!freePlay) brains.get(tracks.size() - 1).resetObservationAnchor(player.getPos());
         spawnGhosts();
         report("Resumed JSON snapshot with " + tracks.size() + " recorded Nao tracks.");
         return say(src, "Resumed saved session: " + tracks.size() + "/24 tracks, day " + day
@@ -177,7 +178,7 @@ public class DoppelgangerMod implements ModInitializer {
         int index = freePlay ? selected : tracks.size() - 1;
         float health = player.getHealth();
         if (!Float.isNaN(healthBaseline) && health < healthBaseline) {
-            memories.rememberEvent(index, day, loopTick, "damage", "health=" + health);
+            memories.rememberEvent(index, day, loopTick, "damage", "score=" + (health - healthBaseline) + " health=" + health);
             report("Playable Nao took damage: " + healthBaseline + " -> " + health);
         }
         healthBaseline = health;
@@ -185,13 +186,13 @@ public class DoppelgangerMod implements ModInitializer {
         for (Map.Entry<String,Integer> e : now.entrySet()) {
             int delta = e.getValue() - inventoryBaseline.getOrDefault(e.getKey(), 0);
             if (delta > 0) {
-                memories.rememberEvent(index, day, loopTick, "item_gain", e.getKey() + " +" + delta);
+                memories.rememberEvent(index, day, loopTick, "item_gain", "score=+" + delta + " item=" + e.getKey());
                 report("Playable Nao obtained " + e.getKey() + " x" + delta);
             }
         }
         for (Map.Entry<String,Integer> e : inventoryBaseline.entrySet()) {
             int delta = e.getValue() - now.getOrDefault(e.getKey(), 0);
-            if (delta > 0) memories.rememberEvent(index, day, loopTick, "item_loss", e.getKey() + " -" + delta);
+            if (delta > 0) memories.rememberEvent(index, day, loopTick, "item_loss", "score=0 count=-" + delta + " item=" + e.getKey());
         }
         inventoryBaseline.clear();
         inventoryBaseline.putAll(now);
@@ -395,6 +396,7 @@ public class DoppelgangerMod implements ModInitializer {
         loopTick = 0;
         world.setTimeOfDay(0);
         resetObservations(player);
+        if (!brains.isEmpty()) brains.get(brains.size() - 1).resetObservationAnchor(player.getPos());
         int finished = tracks.size();
         if (finished == CHARACTERS) {
             freePlay = true;
@@ -640,6 +642,10 @@ public class DoppelgangerMod implements ModInitializer {
         playableAutoMove = enabled;
         lastTickWasAutomatic = enabled;
         lastAutoTick = -1;
+        if (!freePlay && !brains.isEmpty()) {
+            ServerPlayerEntity player = src.getServer().getPlayerManager().getPlayer(owner);
+            if (player != null) brains.get(tracks.size() - 1).resetObservationAnchor(player.getPos());
+        }
         report("Playable Nao automatic movement " + (enabled ? "enabled; generated movement excluded from habit training" : "disabled"));
         return say(src, "AMP " + (enabled ? "ON" : "OFF")
             + ": shared personality controls horizontal movement; use /doppel automove off to stop.");
