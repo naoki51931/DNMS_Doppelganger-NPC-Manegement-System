@@ -1,5 +1,32 @@
 # AGENTS.md — Doppel NPC Management System (DNMS)
 
+<!-- DNMS_BILINGUAL_GUIDE_BEGIN -->
+
+## 日本語：開発者・AIエージェント向け現行ルール
+
+- **設計の不変条件：** 最大24人の奈央に個別UUID・個別記憶 `nao_01.md`～`nao_24.md` を与え、`nao_personality.md` は24人共通の唯一の人格ファイルとする。MIPは個別記憶を破壊せず、`nao_integrated_memory.md` を生成する。観測の重みを勝手に変更しない。
+- **時間と継続性：** 訓練中の `/doppel next` と自動成長では、原則としてプレイアブル奈央の位置とMinecraft時刻のみを戻し、世界の出来事や他NPCの記憶は消さない。24人完成後の `/doppel day next` は翌日06:00へ進めるが、NPCのAI・位置・関係性を維持する。オプションの領域復元は限定的なブロック状態のみ。
+- **MIP：** `/doppel mip time HH:mm` で時刻を設定可能（初期00:00）。時刻スキップの補完・重複防止・`/doppel next` での未処理統合試行を維持する。完全なトランザクション保証はない。
+- **無人再起動：** `/doppel life on` と `/doppel offline on` が有効で、24人フリープレイと必要なチェックポイントが存在すれば、オーナー不在でも再起動後にNPCセッションを復元する。後からログインしたオーナーのために稼働中セッションを上書きしない。サーバー停止時間の早送りはしない。訓練中の無人コールドブート復元は対象外。
+- **プレイアブル選択：** `/doppel control select <slot>` は既存プレイヤーアバターを選択NPCの位置へ移し、そのNPCのAI移動を停止する。残りは継続。`/doppel select` は位置移動のみ。完全なプレイヤーエンティティの所有権移転・インベントリ交換とは説明しない。
+- **永続化：** 約100サーバーtickごとのチェックポイント、個別位置、`nao_social.json`、プレイヤー状態、世代チェックポイントを維持する。異常終了時は最後の成功世代までしか戻らず、世代保存は現状無制限。復元処理は完全にトランザクション化されていない。
+- **実装済みの範囲：** 防具立てNPC、簡易インベントリ、限定的な原木採集・受け渡し、文脈に応じた定型会話、関係値による恋愛進展、共有MIP参照、目標選択、簡易報酬学習。**未実装：** 完全な人型NPC、建築保護、経路探索、自律建築、完全世界巻き戻し、LLM自由会話、複雑な相性・拒否・自由意思、完全なNPC所有権移転。
+- **安全と検証：** 採集は建築物を壊し得る。バックアップ済みテストワールドで確認する。Java 21 / Gradle 8.x / Fabric 1.21.1を対象とし、CIビルドとMinecraft実機試験を区別する。既存仕様の変更前にテストし、古い履歴の記述を現行仕様として引用しない。
+
+## English: Current Rules for Developers and AI Agents
+
+- **Invariants:** Keep up to 24 Nao identities with stable per-Nao UUIDs and separate `nao_01.md`–`nao_24.md` journals. `nao_personality.md` is the sole shared personality. MIP derives `nao_integrated_memory.md` without overwriting source journals. Do not silently change observation weights.
+- **Time and continuity:** During training, `/doppel next` and scheduled growth reset the playable Nao's position and Minecraft clock by default, not other NPC memories or world events. After 24 Naos, `/doppel day next` advances to 06:00 the next day while preserving NPC brains, positions, and relationships. Optional region restoration affects only a bounded set of block states.
+- **MIP:** `/doppel mip time HH:mm` sets the Minecraft-time integration schedule (default 00:00). Preserve catch-up behavior, duplicate suppression, and pending integration attempts on `/doppel next`. The process is not fully transactional.
+- **Unattended restart:** With `/doppel life on`, `/doppel offline on`, a completed 24-Nao free-play, and required checkpoint files, the server attempts NPC restoration without owner login. Do not overwrite the live NPC session when the owner returns. Do not simulate elapsed wall-clock downtime. Unattended cold-boot recovery of unfinished training is out of scope.
+- **Playable control:** `/doppel control select <slot>` moves the existing player avatar to the selected stand-in and pauses that stand-in's AI movement; other NPCs continue. `/doppel select` only teleports. Never describe this as true player-entity possession or full inventory swapping.
+- **Persistence:** Maintain approximately 100-server-tick checkpoints, individual positions, `nao_social.json`, player snapshots, and generation checkpoints. Crash recovery is only as current as the last successful generation; old generations are not currently pruned. Restore is not fully transactional.
+- **Implemented scope:** Armor-stand NPCs, lightweight inventories, limited log harvesting and transfers, contextual template dialogue, threshold-based romance, shared MIP retrieval, goal selection, and basic reward learning. **Not implemented:** true humanoid NPCs, build protection, pathfinding, autonomous building, full-world rewind, open-ended LLM conversation, complex romantic compatibility/rejection/agency, or complete NPC possession.
+- **Safety and verification:** Harvesting can destroy player-built logs; use backed-up disposable worlds. Target Java 21, Gradle 8.x, and Fabric 1.21.1. Distinguish CI compilation from Minecraft runtime testing. Verify changes before claiming success, and treat superseded historical sections as development history rather than current behavior.
+
+<!-- DNMS_BILINGUAL_GUIDE_END -->
+
+
 ## 無人再起動復元とプレイアブル奈央の途中合流（2026-11-21）
 
 24人の訓練を完了したフリープレイで `/doppel life on` と `/doppel offline on` を有効にし、セッションをチェックポイント保存しておくと、サーバー再起動後はオーナーのログインを待たずに、保存済みのディメンション・24人の個別記憶・位置・関係性・AI状態を復元し、NPCシミュレーションを再開します。復元には `session-owner.txt`、最新の正常な世代チェックポイントと保存済み `player.json` が必要です。失敗時は1200サーバーtick間隔で再試行します。
