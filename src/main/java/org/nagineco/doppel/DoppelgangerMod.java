@@ -370,7 +370,7 @@ public class DoppelgangerMod implements ModInitializer {
                 && loopTick != lastAutoTick) {
             lastAutoTick = loopTick;
             int currentIndex = freePlay ? Math.min(selected, brains.size()-1) : tracks.size()-1;
-            HabitBrain.Move choice = AutomaticMovementPatch.choose(brains, currentIndex, loopTick, memories);
+            HabitBrain.Move choice = AutomaticMovementPatch.choose(brains, currentIndex, loopTick, memories, rewardLearning);
             AutomaticMovementPatch.move(player, choice);
             if (loopTick % 200 == 0) report("Playable Nao AMP selected " + choice);
         }
