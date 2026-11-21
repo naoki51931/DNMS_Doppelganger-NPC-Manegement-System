@@ -122,7 +122,7 @@ public final class HabitBrain {
         double[] scores = new double[Move.values().length];
         for (int j = 0; j < all.size(); j++) {
             HabitBrain brain = all.get(j);
-            double individualBoost = j == characterIndex ? 2.0 : 1.0;
+            double individualBoost = 1.0; // All 24 Nao experiences have equal weight.
             for (Reason reason : Reason.values()) {
                 // A preference of 0 suppresses the action evidence for this reason.
                 double affinity = personality.preference(reason) / 5.0;
