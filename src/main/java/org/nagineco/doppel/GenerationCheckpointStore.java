@@ -33,7 +33,7 @@ public final class GenerationCheckpointStore {
                 throw new IOException("Missing memory " + name);
         return generation;
     }
-    public static void publish(Path root, Path json, Path memories, Path playerState) throws IOException {
+    public static void publish(Path root, Path json, Path memories, Path playerState, Path lifeState) throws IOException {
         Files.createDirectories(root);
         String id = String.format(java.util.Locale.ROOT, "generation_%016d", System.nanoTime() & Long.MAX_VALUE);
         Path generation = root.resolve(id);
@@ -43,6 +43,7 @@ public final class GenerationCheckpointStore {
         for (String name : MEMORY_FILES)
             Files.copy(memories.resolve(name), memoryDest.resolve(name));
         if (playerState != null) Files.copy(playerState, generation.resolve("player.json"));
+        if (lifeState != null) Files.copy(lifeState, generation.resolve("nao_lives.json"));
         Files.writeString(generation.resolve("COMPLETE"), "v1\n", StandardCharsets.UTF_8);
         Path temp = root.resolve("CURRENT.tmp");
         try {
