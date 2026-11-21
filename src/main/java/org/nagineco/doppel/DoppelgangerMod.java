@@ -28,6 +28,9 @@ import net.minecraft.world.GameMode;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.Map;
+import java.util.HashMap;
+import net.minecraft.item.ItemStack;
 
 import static net.minecraft.server.command.CommandManager.argument;
 import static net.minecraft.server.command.CommandManager.literal;
@@ -73,6 +76,70 @@ public class DoppelgangerMod implements ModInitializer {
     private static boolean recording = false;
     private static boolean freePlay = false;
 
+
+    private static final Deque<String> reports = new ArrayDeque<>();
+    private static final Map<String,Integer> inventoryBaseline = new HashMap<>();
+    private static float healthBaseline = Float.NaN;
+    private static int observedTick = -1;
+    private static void report(String msg) {
+        String entry = "[DNMS] " + msg;
+        if (reports.size() == 100) reports.removeFirst();
+        reports.addLast(entry);
+        LOG.info(entry);
+    }
+    private static Map<String,Integer> inventory(ServerPlayerEntity player) {
+        Map<String,Integer> result = new HashMap<>();
+        for (int i = 0; i < player.getInventory().size(); i++) {
+            ItemStack stack = player.getInventory().getStack(i);
+            if (!stack.isEmpty()) result.merge(stack.getItem().toString(), stack.getCount(), Integer::sum);
+        }
+        return result;
+    }
+    private static void resetObservations(ServerPlayerEntity player) {
+        inventoryBaseline.clear();
+        inventoryBaseline.putAll(inventory(player));
+        healthBaseline = player.getHealth();
+        observedTick = -1;
+    }
+    private static void observePlayable(ServerPlayerEntity player) {
+        if (memories == null || tracks.isEmpty() || loopTick % 20 != 0 || observedTick == loopTick) return;
+        observedTick = loopTick;
+        int index = freePlay ? selected : tracks.size() - 1;
+        float health = player.getHealth();
+        if (!Float.isNaN(healthBaseline) && health < healthBaseline) {
+            memories.rememberEvent(index, day, loopTick, "damage", "health=" + health);
+            report("Playable Nao took damage: " + healthBaseline + " -> " + health);
+        }
+        healthBaseline = health;
+        Map<String,Integer> now = inventory(player);
+        for (Map.Entry<String,Integer> e : now.entrySet()) {
+            int delta = e.getValue() - inventoryBaseline.getOrDefault(e.getKey(), 0);
+            if (delta > 0) {
+                memories.rememberEvent(index, day, loopTick, "item_gain", e.getKey() + " +" + delta);
+                report("Playable Nao obtained " + e.getKey() + " x" + delta);
+            }
+        }
+        for (Map.Entry<String,Integer> e : inventoryBaseline.entrySet()) {
+            int delta = e.getValue() - now.getOrDefault(e.getKey(), 0);
+            if (delta > 0) memories.rememberEvent(index, day, loopTick, "item_loss", e.getKey() + " -" + delta);
+        }
+        inventoryBaseline.clear();
+        inventoryBaseline.putAll(now);
+    }
+    private static int showReports(ServerCommandSource src) {
+        if (reports.isEmpty()) return say(src, "No DNMS reports yet.");
+        for (String entry : reports) src.sendFeedback(() -> Text.literal(entry), false);
+        return 1;
+    }
+    private static int npcReport(ServerCommandSource src) {
+        for (int i = 0; i < ghosts.size(); i++) {
+            ArmorStandEntity npc = ghosts.get(i);
+            if (!npc.isRemoved()) report("NPC Nao " + (i+1) + " position="
+                + npc.getBlockPos().toShortString() + " samples=" + brains.get(i).samples());
+        }
+        return showReports(src);
+    }
+
     @Override public void onInitialize() {
         try {
             Path setting = mipSettingFile();
@@ -98,6 +165,8 @@ public class DoppelgangerMod implements ModInitializer {
                 .then(literal("start").executes(c -> start(c.getSource())))
                 .then(literal("next").executes(c -> next(c.getSource())))
                 .then(literal("status").executes(c -> status(c.getSource())))
+                .then(literal("logs").executes(c -> showReports(c.getSource())))
+                .then(literal("npc").then(literal("report").executes(c -> npcReport(c.getSource()))))
                 .then(literal("select").then(argument("id", IntegerArgumentType.integer(1, 24))
                     .executes(c -> select(c.getSource(), IntegerArgumentType.getInteger(c, "id")))))
                 .then(literal("preference").then(argument("reason", StringArgumentType.word())
@@ -135,6 +204,7 @@ public class DoppelgangerMod implements ModInitializer {
         clearGhosts();
         tracks.clear();
         brains.clear();
+        reports.clear();
         try {
             memories = new PersonalityMemoryStore(
                 FabricLoader.getInstance().getGameDir().resolve("config/doppelganger/memories"));
@@ -156,6 +226,8 @@ public class DoppelgangerMod implements ModInitializer {
         catch (IOException e) { return say(src, "Could not read Nao 01 memory: " + e.getMessage()); }
         brains.add(first);
         world.setTimeOfDay(0);
+        resetObservations(player);
+        report("Playable Nao training started; automatic observation enabled.");
         scheduleInitialized = false;
         lastScheduledDay = Long.MIN_VALUE;
         return say(src, "Day 1, loop 1/24. Play, then /doppel next.");
@@ -166,6 +238,7 @@ public class DoppelgangerMod implements ModInitializer {
         if (!recording || world == null || owner == null) return;
         ServerPlayerEntity player = server.getPlayerManager().getPlayer(owner);
         if (player == null || player.getServerWorld() != world) return;
+        observePlayable(player);
         if (!freePlay) {
             List<Vec3d> current = tracks.get(tracks.size() - 1);
             if (current.size() < DAY_TICKS) {
@@ -235,6 +308,7 @@ public class DoppelgangerMod implements ModInitializer {
                 player.getYaw(), player.getPitch());
         loopTick = 0;
         world.setTimeOfDay(0);
+        resetObservations(player);
         int finished = tracks.size();
         if (finished == CHARACTERS) {
             freePlay = true;
@@ -324,7 +398,7 @@ public class DoppelgangerMod implements ModInitializer {
     }
 
     private static int parseMinecraftClock(String clock) {
-        if (!clock.matches("(?:[01]\\\\d|2[0-3]):[0-5]\\\\d"))
+        if (!clock.matches("(?:[01][0-9]|2[0-3]):[0-5][0-9]"))
             throw new IllegalArgumentException("Expected HH:mm from 00:00 to 23:59.");
         int hour = Integer.parseInt(clock.substring(0, 2));
         int minute = Integer.parseInt(clock.substring(3, 5));
