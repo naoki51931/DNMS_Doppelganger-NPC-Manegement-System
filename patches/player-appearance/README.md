@@ -1,5 +1,9 @@
 # Player Appearance Patch (PAP) — phase 1
 
+## Phase 3 commands (2026-11-21)
+
+During an initialized session, operators can inspect a logical Nao's appearance metadata with `/doppel appearance status <slot>`. The playable Nao owner can change the persisted skin key with `/doppel appearance set <slot> <skinKey>`. Valid slots are 1–24 but must already exist in `NaoLifeStore`. A save failure restores the prior in-memory key. These commands **do not change the visible armor stand or download a skin**.
+
 ## Phase 2 integration (2026-11-21)
 
 - `build.gradle` now compiles the PAP source directory.
