@@ -19,5 +19,6 @@ java { sourceCompatibility = JavaVersion.VERSION_21; targetCompatibility = JavaV
 sourceSets {
     main {
         java.srcDir 'patches/memory-integration/src'
+        java.srcDir 'patches/automatic-movement/src'
     }
 }
