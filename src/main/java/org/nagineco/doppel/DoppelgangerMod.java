@@ -24,7 +24,7 @@ import static net.minecraft.server.command.CommandManager.literal;
 
 /**
  * Fabric 1.21.1 server-side MVP.
- * Ghosts are replayed armor stands, NOT intelligent Minecraft player bots.
+ * Ghosts are autonomous imitation-driven armor stands, NOT real player bots.
  * No block/entity/inventory rollback is performed.
  */
 public class DoppelgangerMod implements ModInitializer {
@@ -32,6 +32,8 @@ public class DoppelgangerMod implements ModInitializer {
     private static final int DAY_TICKS = 24000;
     private static final List<List<Vec3d>> tracks = new ArrayList<>();
     private static final List<ArmorStandEntity> ghosts = new ArrayList<>();
+    private static final List<HabitBrain> brains = new ArrayList<>();
+    private static boolean aiMode = true;
     private static UUID owner;
     private static ServerWorld world;
     private static BlockPos dawn;
@@ -50,6 +52,8 @@ public class DoppelgangerMod implements ModInitializer {
                 .then(literal("status").executes(c -> status(c.getSource())))
                 .then(literal("select").then(argument("id", IntegerArgumentType.integer(1, 24))
                     .executes(c -> select(c.getSource(), IntegerArgumentType.getInteger(c, "id")))))
+                .then(literal("ai").then(literal("on").executes(c -> ai(c.getSource(), true)))
+                    .then(literal("off").executes(c -> ai(c.getSource(), false))))
                 .then(literal("stop").executes(c -> stop(c.getSource())))
             )
         );
@@ -63,6 +67,8 @@ public class DoppelgangerMod implements ModInitializer {
         catch (Exception e) { return say(src, "Run as an operator player."); }
         clearGhosts();
         tracks.clear();
+        brains.clear();
+        aiMode = true;
         owner = player.getUuid();
         world = player.getServerWorld();
         dawn = player.getBlockPos();
@@ -72,6 +78,7 @@ public class DoppelgangerMod implements ModInitializer {
         freePlay = false;
         recording = true;
         tracks.add(new ArrayList<>());
+        brains.add(new HabitBrain());
         world.setTimeOfDay(0);
         return say(src, "Day 1, loop 1/24. Play, then /doppel next.");
     }
@@ -82,7 +89,10 @@ public class DoppelgangerMod implements ModInitializer {
         if (player == null || player.getServerWorld() != world) return;
         if (!freePlay) {
             List<Vec3d> current = tracks.get(tracks.size() - 1);
-            if (current.size() < DAY_TICKS) current.add(player.getPos());
+            if (current.size() < DAY_TICKS) {
+                current.add(player.getPos());
+                brains.get(tracks.size() - 1).observe(player.getPos());
+            }
             if (current.size() >= DAY_TICKS) {
                 // Pause at end of recorded day until the operator advances.
                 world.setTimeOfDay(23999);
@@ -95,7 +105,18 @@ public class DoppelgangerMod implements ModInitializer {
             if (ghost.isRemoved() || i >= tracks.size()) continue;
             List<Vec3d> samples = tracks.get(i);
             if (!samples.isEmpty()) {
-                Vec3d pos = samples.get(Math.min(loopTick, samples.size() - 1));
+                Vec3d pos;
+                if (aiMode) {
+                    pos = brains.get(i).step(ghost.getPos(), loopTick);
+                    // Bound AI to a local demonstration area and avoid solid blocks.
+                    Vec3d origin = samples.get(0);
+                    if (pos.squaredDistanceTo(origin) > 32 * 32
+                            || !world.isAir(net.minecraft.util.math.BlockPos.ofFloored(pos))) {
+                        pos = ghost.getPos();
+                    }
+                } else {
+                    pos = samples.get(Math.min(loopTick, samples.size() - 1));
+                }
                 ghost.refreshPositionAndAngles(pos.x, pos.y, pos.z, ghost.getYaw(), 0);
             }
         }
@@ -109,7 +130,7 @@ public class DoppelgangerMod implements ModInitializer {
             day++;
             loopTick = 0;
             world.setTimeOfDay(0);
-            return say(src, "Day " + day + " started (free-play ghost replay).");
+            return say(src, "Day " + day + " started (AI NPC simulation).");
         }
         ServerPlayerEntity player = src.getServer().getPlayerManager().getPlayer(owner);
         if (player == null) return say(src, "Owner is offline.");
@@ -125,6 +146,7 @@ public class DoppelgangerMod implements ModInitializer {
             return say(src, "24 recordings completed. Use /doppel select 1..24.");
         }
         tracks.add(new ArrayList<>());
+        brains.add(new HabitBrain());
         spawnGhosts();
         return say(src, "Day " + day + " loop " + (finished+1) + "/24.");
     }
@@ -153,17 +175,18 @@ public class DoppelgangerMod implements ModInitializer {
         selected = id - 1;
         List<Vec3d> samples = tracks.get(selected);
         if (!samples.isEmpty()) {
-            Vec3d pos = samples.get(Math.min(loopTick, samples.size()-1));
+            Vec3d pos = selected < ghosts.size() ? ghosts.get(selected).getPos()
+                    : samples.get(Math.min(loopTick, samples.size()-1));
             player.teleport(world, pos.x, pos.y, pos.z, player.getYaw(), player.getPitch());
         }
         // This selects a ghost viewpoint/location; it does not possess a real NPC.
-        return say(src, "Selected Doppel " + id + ". Player moved to its replay position.");
+        return say(src, "Selected Doppel " + id + ". Player moved to its AI NPC position (not possession).");
     }
 
     private static int status(ServerCommandSource src) {
         return say(src, "Day " + day + " | recorded " + tracks.size()
             + "/24 | mode " + (freePlay ? "free-play" : "recording")
-            + " | selected " + (selected+1) + " | tick " + loopTick);
+            + " | selected " + (selected+1) + " | AI " + aiMode + " | tick " + loopTick);
     }
 
     private static int stop(ServerCommandSource src) {
@@ -171,10 +194,16 @@ public class DoppelgangerMod implements ModInitializer {
         recording = false;
         freePlay = false;
         tracks.clear();
+        brains.clear();
         owner = null;
         world = null;
         dawn = null;
         return say(src, "Stopped. Unsaved recordings discarded.");
+    }
+
+    private static int ai(ServerCommandSource src, boolean enabled) {
+        aiMode = enabled;
+        return say(src, "AI movement " + (enabled ? "enabled" : "disabled; replay mode"));
     }
 
     private static void clearGhosts() {
