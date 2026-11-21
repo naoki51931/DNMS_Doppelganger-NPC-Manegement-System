@@ -45,3 +45,27 @@ jobs:
         with:
           name: dnms-fabric-build
           path: build/libs/*.jar
+
+  native-prototypes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile all C++ prototypes with warnings as errors
+        run: |
+          set -eu
+          mkdir -p /tmp/dnms-native
+          for src in src/doppel_day_loop.cpp src/doppel_integrated.cpp src/doppel_npc.cpp src/doppel_switch.cpp; do
+            g++ -std=c++17 -Wall -Wextra -Werror -O2 "$src" -o "/tmp/dnms-native/$(basename "$src" .cpp)"
+          done
+      - name: Smoke-test 256 active Nao boundary
+        run: |
+          set -eu
+          printf 'next\n%.0s' {1..24} > /tmp/dnms-native/commands.txt
+          printf 'add 232\nselect 256\nstatus\nquit\n' >> /tmp/dnms-native/commands.txt
+          /tmp/dnms-native/doppel_integrated < /tmp/dnms-native/commands.txt > /tmp/dnms-native/integrated.log
+          grep -q 'Active Naos: 256/256' /tmp/dnms-native/integrated.log
+          grep -q 'Now controlling #256' /tmp/dnms-native/integrated.log
+          printf 'add 232\n256\nq\n' | /tmp/dnms-native/doppel_switch > /tmp/dnms-native/switch.log
+          grep -q 'Active: 256/256' /tmp/dnms-native/switch.log
+          grep -q 'Now controlling #256' /tmp/dnms-native/switch.log
