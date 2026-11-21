@@ -4,7 +4,7 @@ Experimental Minecraft Java Edition **Fabric 1.21.1** server mod plus C++ consol
 
 ## Fabric mod (early MVP)
 
-The Java mod records one player's positions across repeated simulated days and replays past tracks as moving armor-stand ghosts. This is **not yet a complete Minecraft NPC or rollback implementation**.
+The Java mod records one player's positions across repeated simulated days and uses per-character movement habit models to move armor-stand NPC stand-ins autonomously (or replays recorded tracks). This is **not yet a complete Minecraft NPC or rollback implementation**.
 
 ### Build
 
@@ -22,6 +22,8 @@ Copy the generated `build/libs/doppelganger-npc-system-0.1.0.jar` into a compati
 - `/doppel next` — finish the current recording, reset the clock and player position, and begin the next loop
 - `/doppel status` — show progress
 - `/doppel select 1` through `/doppel select 24` — after 24 recordings, teleport the player to the selected recorded ghost's current replay position
+- `/doppel ai on` — use learned movement habits for autonomous NPC movement (default)
+- `/doppel ai off` — switch to exact recorded-position replay
 - `/doppel stop` — stop and discard in-memory recordings
 
 The recording window is at most 24,000 ticks (one standard Minecraft day) per character. `next` can be invoked before a full day is recorded; for complete daily tracks, wait until the day ends.
@@ -29,11 +31,12 @@ The recording window is at most 24,000 ticks (one standard Minecraft day) per ch
 ### Important limitations
 
 - **No real rewind of the world**: block edits, mobs, weather, player inventory and other game state are NOT restored. Only the clock and player's position are reset.
-- Ghosts are armor stands replaying recorded positions, not full player models or intelligent agents.
+- NPC stand-ins are armor stands driven by simple learned directional frequencies (day/night), not full player models, pathfinding agents, or language-model AI.
+- The learned movement policy has no inventory, mining, building, social behavior or robust collision avoidance. The stand-ins are not real controllable player entities.
 - The `select` command teleports the operator; it does not transfer control to a real NPC or suppress the selected ghost.
 - Recordings are held in memory and lost when the server stops or the mod is stopped.
 - Multiplayer, dimension changes, restarts, collisions, death, and chunk loading are not yet robustly handled.
-- No actual AI habit-learning integration yet; the C++ learner is a separate demo.
+- Basic movement imitation is integrated in the Fabric mod; the richer C++ learner remains a separate demo.
 
 ## C++ console prototypes
 
