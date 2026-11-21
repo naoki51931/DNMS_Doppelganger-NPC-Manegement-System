@@ -18,6 +18,8 @@ import java.io.IOException;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.entity.EntityType;
+import net.minecraft.entity.EquipmentSlot;
+import net.minecraft.item.Items;
 import net.minecraft.entity.decoration.ArmorStandEntity;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.command.ServerCommandSource;
@@ -704,6 +706,13 @@ public class DoppelgangerMod implements ModInitializer {
             stand.refreshPositionAndAngles(pos.x, pos.y, pos.z, 0, 0);
             stand.setNoGravity(true);
             stand.setInvulnerable(true);
+            // Vanilla-only visual preview: an armed mannequin with a player head.
+            // This is not a true humanoid player renderer or a loaded skin texture.
+            stand.setShowArms(true);
+            stand.equipStack(EquipmentSlot.HEAD, new ItemStack(Items.PLAYER_HEAD));
+            stand.equipStack(EquipmentSlot.CHEST, new ItemStack(Items.LEATHER_CHESTPLATE));
+            stand.equipStack(EquipmentSlot.LEGS, new ItemStack(Items.LEATHER_LEGGINGS));
+            stand.equipStack(EquipmentSlot.FEET, new ItemStack(Items.LEATHER_BOOTS));
             stand.setCustomName(Text.literal("Doppel " + (i+1)));
             stand.setCustomNameVisible(true);
             world.spawnEntity(stand);
