@@ -6,7 +6,8 @@
 #include <string>
 #include <vector>
 
-constexpr int MAX_CHARACTERS = 24;
+constexpr int INITIAL_NAOS = 24;
+constexpr int MAX_CHARACTERS = 256;
 constexpr int WORLD_SIZE = 16;
 
 enum class Action { Wait, North, South, West, East, Gather, Flee, Count };
@@ -52,6 +53,7 @@ struct Character {
 
 class Simulation {
     std::array<Character, MAX_CHARACTERS> people{};
+    int activeCount = INITIAL_NAOS;
     int trainedCount = 0;
     int controlled = 0;
     int tickCount = 0;
@@ -87,7 +89,7 @@ class Simulation {
         // Snapshot all observations before applying any action.
         std::array<Situation, MAX_CHARACTERS> observations{};
         std::array<Action, MAX_CHARACTERS> actions{};
-        int active = freePlay ? MAX_CHARACTERS : trainedCount + 1;
+        int active = freePlay ? activeCount : trainedCount + 1;
         for (int i = 0; i < active; ++i) {
             observations[i] = observe(people[i]);
             actions[i] = i == controlled ? humanAction
@@ -116,7 +118,7 @@ class Simulation {
         std::cout << "Character #" << c.id << " became NPC ("
                   << c.habit.samples() << " demonstrations).\n";
         ++trainedCount;
-        if (trainedCount == MAX_CHARACTERS) {
+        if (trainedCount == INITIAL_NAOS) {
             freePlay = true;
             controlled = 0;
             std::cout << "24 NPCs ready! Switch freely with: select 1..24\n";
@@ -161,11 +163,25 @@ public:
                           << "status : show world state\n";
             } else if (line == "status") show();
             else if (line == "next") finishRound();
+            else if (line.rfind("add ",0)==0) {
+                std::istringstream in(line.substr(4));
+                int n; std::string extra;
+                if (!freePlay || !(in >> n) || (in >> extra) || n < 1 || n > MAX_CHARACTERS-activeCount)
+                    std::cout << "Complete training first; valid add 1.." << MAX_CHARACTERS-activeCount << "\n";
+                else {
+                    for (int i=activeCount; i<activeCount+n; ++i) {
+                        people[i].id=i+1; people[i].trained=true;
+                        people[i].x=i%WORLD_SIZE; people[i].z=i/WORLD_SIZE;
+                    }
+                    activeCount+=n;
+                    std::cout << "Active Naos: " << activeCount << "/256\n";
+                }
+            }
             else if (line.rfind("select ",0)==0) {
                 std::istringstream in(line.substr(7));
                 int n; std::string extra;
-                if (!(in >> n) || (in >> extra) || n<1 || n>MAX_CHARACTERS)
-                    std::cout << "Use select 1..24\n";
+                if (!(in >> n) || (in >> extra) || n<1 || n>activeCount)
+                    std::cout << "Select an active Nao\n";
                 else if (!freePlay)
                     std::cout << "Complete all 24 training rounds first.\n";
                 else {
