@@ -31,7 +31,12 @@ public final class MemoryIntegrationPatch {
             System.err.println("Usage: java ...MemoryIntegrationPatch <server-memory-directory>");
             System.exit(2);
         }
-        Path dir = Path.of(args[0]).toAbsolutePath().normalize();
+        String result = integrate(Path.of(args[0]));
+        System.out.println(result);
+    }
+
+    public static String integrate(Path memoryDirectory) throws IOException {
+        Path dir = memoryDirectory.toAbsolutePath().normalize();
         if (!Files.isDirectory(dir)) throw new IOException("Not a directory: " + dir);
         Path personality = dir.resolve("nao_personality.md");
         if (!Files.isRegularFile(personality))
@@ -100,7 +105,7 @@ public final class MemoryIntegrationPatch {
                 Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING);
             }
         } finally { Files.deleteIfExists(temp); }
-        System.out.printf(Locale.ROOT, "Integrated %d memories from 24 Nao; rejected %d; output %s%n",
+        return String.format(Locale.ROOT, "Integrated %d memories from 24 Nao; rejected %d; output %s",
             events.size(), invalid, target);
     }
 
