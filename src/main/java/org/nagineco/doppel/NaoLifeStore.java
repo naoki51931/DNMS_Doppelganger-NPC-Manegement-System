@@ -17,6 +17,9 @@ public final class NaoLifeStore {
         public String residence = "SPAWN";
         public int workStart = 9, workEnd = 17;
         public String lifeStage = "ADULT";
+        public String planStep = "OBSERVE";
+        public long planStepUntilTick;
+        public String lastRecalledMemory = "";
         public Map<String, String> personalRelationships = new HashMap<>();
         public long lastRoutineDay = Long.MIN_VALUE;
         public long lastRelationshipDay = Long.MIN_VALUE;
@@ -59,6 +62,8 @@ public final class NaoLifeStore {
                 if (n.longTermGoal == null) n.longTermGoal = "DISCOVER";
                 if (n.residence == null) n.residence = "SPAWN";
                 if (n.lifeStage == null) n.lifeStage = "ADULT";
+                if (n.planStep == null) n.planStep = "OBSERVE";
+                if (n.lastRecalledMemory == null) n.lastRecalledMemory = "";
                 if (n.personalRelationships == null) n.personalRelationships = new HashMap<>();
                 if (n.inventory == null) n.inventory = new HashMap<>();
                 if (n.goalRewards == null) n.goalRewards = new HashMap<>();
