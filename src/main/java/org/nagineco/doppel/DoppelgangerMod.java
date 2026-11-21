@@ -491,7 +491,7 @@ public class DoppelgangerMod implements ModInitializer {
                         if (loopTick % 1200 == 0) {
                             nao.goal = NaoLifeAI.chooseGoal(nao, sharedKnowledge, world.getTimeOfDay());
                         }
-                        HabitBrain.Move move = NaoLifeAI.move(nao, brains, i, loopTick, memories, rewardLearning);
+                        HabitBrain.Move move = NaoLifeAI.move(nao, brains, i, loopTick, memories, rewardLearning, sharedKnowledge, ghost.getPos());
                         pos = HabitBrain.applyMove(ghost.getPos(), move);
                         if (loopTick % 20 == 0) {
                             NaoLifeAI.update(nao, move != HabitBrain.Move.STAY);
