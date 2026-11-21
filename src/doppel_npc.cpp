@@ -5,7 +5,8 @@
 #include <algorithm>
 #include <string>
 
-constexpr int MAX_AGENTS = 24;
+constexpr int INITIAL_NAOS = 24;
+constexpr int MAX_AGENTS = 256;
 enum class Action { Explore, Chop, ReturnHome, Flee };
 const char* name(Action a) {
     switch(a) {
@@ -63,7 +64,7 @@ Action demoHumanChoice(Situation s) {
 }
 int main() {
     std::vector<Doppelganger> agents;
-    for (int round=0; round<MAX_AGENTS; ++round) {
+    for (int round=0; round<INITIAL_NAOS; ++round) {
         agents.push_back({round+1});
         std::cout << "\nRound " << round+1 << ": human=" << round+1
                   << ", NPCs=" << round << '\n';
