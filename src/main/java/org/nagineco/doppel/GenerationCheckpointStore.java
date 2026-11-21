@@ -16,7 +16,7 @@ public final class GenerationCheckpointStore {
     private static String[] makeMemoryFiles() {
         List<String> names = new ArrayList<>();
         names.add("nao_personality.md");
-        for (int i = 1; i <= 24; i++) names.add(String.format(java.util.Locale.ROOT, "nao_%02d.md", i));
+        for (int i = 1; i <= 256; i++) names.add(String.format(java.util.Locale.ROOT, "nao_%02d.md", i));
         return names.toArray(new String[0]);
     }
     public static Path latest(Path root) throws IOException {
@@ -28,9 +28,8 @@ public final class GenerationCheckpointStore {
         if (!Files.isRegularFile(generation.resolve("COMPLETE"))
                 || !Files.isRegularFile(generation.resolve("recordings.json")))
             throw new IOException("Incomplete checkpoint generation " + id);
-        for (String name : MEMORY_FILES)
-            if (!Files.isRegularFile(generation.resolve("memories").resolve(name)))
-                throw new IOException("Missing memory " + name);
+        if (!Files.isRegularFile(generation.resolve("memories/nao_personality.md")))
+            throw new IOException("Missing shared personality");
         return generation;
     }
     public static void publish(Path root, Path json, Path memories, Path playerState, Path lifeState) throws IOException {
@@ -44,7 +43,8 @@ public final class GenerationCheckpointStore {
         Files.createDirectories(memoryDest);
         Files.copy(json, generation.resolve("recordings.json"));
         for (String name : MEMORY_FILES)
-            Files.copy(memories.resolve(name), memoryDest.resolve(name));
+            if (Files.isRegularFile(memories.resolve(name)))
+                Files.copy(memories.resolve(name), memoryDest.resolve(name));
         if (playerState != null) Files.copy(playerState, generation.resolve("player.json"));
         if (lifeState != null) Files.copy(lifeState, generation.resolve("nao_lives.json"));
         if (socialState != null) Files.copy(socialState, generation.resolve("nao_social.json"));
@@ -63,7 +63,8 @@ public final class GenerationCheckpointStore {
     public static void restoreMemories(Path generation, Path target) throws IOException {
         Files.createDirectories(target);
         for (String name : MEMORY_FILES)
-            Files.copy(generation.resolve("memories").resolve(name), target.resolve(name),
-                StandardCopyOption.REPLACE_EXISTING);
+            if (Files.isRegularFile(generation.resolve("memories").resolve(name)))
+                Files.copy(generation.resolve("memories").resolve(name), target.resolve(name),
+                    StandardCopyOption.REPLACE_EXISTING);
     }
 }
