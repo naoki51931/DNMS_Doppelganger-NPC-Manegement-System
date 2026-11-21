@@ -256,3 +256,10 @@ These changes are **unverified by CI and Minecraft runtime**; batch build errors
 3. Build a multi-step planner with execution, retry, resource requirements and success/failure feedback. Current MIP planner selects a goal, not a full plan.
 4. Persist and present growth proposals with explicit owner approval, versioned personality updates, audit trail, and conflict handling.
 5. Verify Fabric 1.21.1 compile, unit tests and in-game behavior for all changes after last known green build `7c46db9`.
+
+
+### Midnight MIP and persistent Nao stand-ins (2026-11-21)
+
+- **MIP shared-memory integration is fixed to Minecraft 00:00 (tick 18000)**. Older custom `mip.time` values are ignored. `/doppel mip time` accepts only `00:00`. Natural midnight crossing invokes the existing memory integration. Manual `/doppel mip run` and enabling MIP can still trigger an immediate integration; these are explicit/manual exceptions. This does **not** change per-record weights: all experiences retain weight 1.0, so prolific Naos can still contribute more records. A time skip over midnight may skip integration, as before.
+- **Nao continuity during growth:** `spawnGhosts()` no longer destroys and recreates every existing stand-in when another Nao is added. Living stands retain their entity and current position; missing/removed stands are recreated for the same slot using their last available position. The logical Nao UUID and saved journals are unchanged. Explicit `/doppel stop` still removes the temporary stand-ins and `/doppel resume` recreates them from saved tracks; **permanent entity persistence, independent position checkpoints, and protection from every kind of disappearance are not yet implemented**.
+- Build and in-game verification remain pending.
