@@ -65,7 +65,7 @@ Action demoHumanChoice(Situation s) {
 int main() {
     std::vector<Doppelganger> agents;
     for (int round=0; round<INITIAL_NAOS; ++round) {
-        agents.push_back({round+1});
+        agents.push_back({round+1, false, {}, {}});
         std::cout << "\nRound " << round+1 << ": human=" << round+1
                   << ", NPCs=" << round << '\n';
         for (int tick=0; tick<12; ++tick) {
