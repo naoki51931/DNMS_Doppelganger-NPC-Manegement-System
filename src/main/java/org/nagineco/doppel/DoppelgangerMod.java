@@ -97,11 +97,10 @@ public class DoppelgangerMod implements ModInitializer {
         RecordingSnapshotStore.save(snapshotFile(), tracks, day, selected, freePlay);
         ServerPlayerEntity player = owner == null || world == null ? null
             : world.getServer().getPlayerManager().getPlayer(owner);
-        Path playerFile = null;
-        if (player != null && player.getServerWorld() == world) {
-            playerFile = playerSnapshotFile();
-            PlayerStateStore.save(playerFile, player);
-        }
+        if (player == null || player.getServerWorld() != world)
+            throw new IOException("Playable Nao must be online in the recording dimension to checkpoint");
+        Path playerFile = playerSnapshotFile();
+        PlayerStateStore.save(playerFile, player);
         GenerationCheckpointStore.publish(checkpointRoot(), snapshotFile(),
             memories.directory(), playerFile);
     }
@@ -124,6 +123,7 @@ public class DoppelgangerMod implements ModInitializer {
         List<List<Vec3d>> loadedTracks;
         PersonalityMemoryStore loadedMemories;
         List<HabitBrain> loadedBrains = new ArrayList<>();
+        PlayerStateStore.State restoredPlayerState = null;
         try {
             Path generation = GenerationCheckpointStore.latest(checkpointRoot());
             Path recordingFile = generation == null ? snapshotFile()
@@ -141,13 +141,14 @@ public class DoppelgangerMod implements ModInitializer {
             if (loadedTracks.isEmpty()) return say(src, "Snapshot has no recordings.");
             loadedMemories = new PersonalityMemoryStore(
                 FabricLoader.getInstance().getGameDir().resolve("config/doppelganger/memories"));
-            if (playerState != null) PlayerStateStore.restore(player, playerState);
             for (int i = 0; i < loadedTracks.size(); i++) {
                 HabitBrain brain = new HabitBrain();
                 loadedMemories.restore(i, brain);
                 loadedMemories.restoreRewards(i, brain);
                 loadedBrains.add(brain);
             }
+            restoredPlayerState = playerState;
+            if (restoredPlayerState != null) PlayerStateStore.restore(player, restoredPlayerState);
         } catch (IOException ex) {
             return say(src, "Could not resume session: " + ex.getMessage());
         }
@@ -173,7 +174,7 @@ public class DoppelgangerMod implements ModInitializer {
         resetObservations(player);
         if (!freePlay) {
             List<Vec3d> active = tracks.get(tracks.size() - 1);
-            if (!active.isEmpty() && !Files.exists(checkpointRoot().resolve("CURRENT"))) {
+            if (!active.isEmpty() && restoredPlayerState == null) {
                 Vec3d last = active.get(active.size() - 1);
                 player.teleport(world, last.x, last.y, last.z, player.getYaw(), player.getPitch());
             }
