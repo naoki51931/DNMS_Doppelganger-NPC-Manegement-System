@@ -1,6 +1,8 @@
 package org.nagineco.doppel;
 
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.server.world.ServerWorld;
 import java.util.List;
 
 /**
@@ -34,10 +36,33 @@ public final class NaoLifeAI {
         }
         return options[best];
     }
+    public static boolean danger(ServerWorld world, Vec3d pos) {
+        BlockPos feet = BlockPos.ofFloored(pos);
+        BlockPos below = feet.down();
+        return !world.getFluidState(feet).isEmpty()
+            || !world.getFluidState(below).isEmpty()
+            || !world.getBlockState(below).isSolidBlock(world, below);
+    }
+    public static void plan(NaoLifeStore.Nao nao, SharedMemoryReader memory,
+                            ServerWorld world, Vec3d position, long tick) {
+        if (danger(world, position) || nao.blockedSteps >= 8) {
+            nao.goal = NaoLifeStore.Goal.SAFETY;
+            nao.goalUntilTick = tick + 100;
+            nao.blockedSteps = 0;
+        } else if (nao.energy < 20) {
+            nao.goal = NaoLifeStore.Goal.REST;
+            nao.goalUntilTick = tick + 200;
+        } else if (tick >= nao.goalUntilTick
+                || (nao.goal == NaoLifeStore.Goal.REST && nao.energy >= 80)) {
+            nao.goal = chooseGoal(nao, memory, tick);
+            nao.goalUntilTick = tick + 1200;
+        }
+        nao.decisions++;
+    }
     public static HabitBrain.Move move(NaoLifeStore.Nao nao, List<HabitBrain> brains,
             int index, int tick, PersonalityMemoryStore personality,
             boolean rewardEnabled, SharedMemoryReader memory, Vec3d position) {
-        if (nao.goal == NaoLifeStore.Goal.REST) return HabitBrain.Move.STAY;
+        if (nao.goal == NaoLifeStore.Goal.REST || nao.goal == NaoLifeStore.Goal.SAFETY) return HabitBrain.Move.STAY;
         // All individuals can consult a nearby experience, regardless of its original owner.
         if (memory != null && position != null) {
             var nearby = memory.nearest(nao.goal, position, 16.0);
