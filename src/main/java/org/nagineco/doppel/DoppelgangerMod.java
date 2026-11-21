@@ -951,7 +951,7 @@ public class DoppelgangerMod implements ModInitializer {
         logMIP("Initialized; enabled=" + mipEnabled + "; daily time="
             + formatMinecraftClock(mipScheduleTick) + ". Use /doppel mip status|on|off|run|logs|time.");
         try { configuredMaxNaos = Files.isRegularFile(maxNaosFile())
-            ? Integer.parseInt(Files.readString(maxNaosFile(), StandardCharsets.UTF_8).trim()) : DEFAULT_NAOS;
+            ? Integer.parseInt(Files.readString(maxNaosFile(), StandardCharsets.UTF_8).trim()) : 256;
             if (configuredMaxNaos < 1 || configuredMaxNaos > 256) configuredMaxNaos = DEFAULT_NAOS;
         } catch (IOException | NumberFormatException ex) { configuredMaxNaos = DEFAULT_NAOS; }
         CommandRegistrationCallback.EVENT.register((dispatcher, registry, environment) ->
@@ -962,21 +962,21 @@ public class DoppelgangerMod implements ModInitializer {
                     .then(literal("bootstrap").executes(c -> bootstrapNaos(c.getSource())))
                     .then(literal("add").then(argument("count", IntegerArgumentType.integer(1, 256))
                         .executes(c -> addNaos(c.getSource(), IntegerArgumentType.getInteger(c, "count")))))
-                    .then(literal("max").then(argument("count", IntegerArgumentType.integer(1, 24))
+                    .then(literal("max").then(argument("count", IntegerArgumentType.integer(1, 256))
                         .executes(c -> setMaxNaos(c.getSource(), IntegerArgumentType.getInteger(c, "count")))))
-                    .then(literal("profile").then(argument("slot", IntegerArgumentType.integer(1, 24))
+                    .then(literal("profile").then(argument("slot", IntegerArgumentType.integer(1, 256))
                         .executes(c -> profile(c.getSource(), IntegerArgumentType.getInteger(c, "slot")))))
-                    .then(literal("job").then(argument("slot", IntegerArgumentType.integer(1, 24))
+                    .then(literal("job").then(argument("slot", IntegerArgumentType.integer(1, 256))
                         .then(argument("value", StringArgumentType.word())
                             .executes(c -> updateProfile(c.getSource(), IntegerArgumentType.getInteger(c, "slot"), "job", StringArgumentType.getString(c, "value"))))))
-                    .then(literal("home").then(argument("slot", IntegerArgumentType.integer(1, 24))
+                    .then(literal("home").then(argument("slot", IntegerArgumentType.integer(1, 256))
                         .then(argument("value", StringArgumentType.word())
                             .executes(c -> updateProfile(c.getSource(), IntegerArgumentType.getInteger(c, "slot"), "home", StringArgumentType.getString(c, "value"))))))
-                    .then(literal("goal").then(argument("slot", IntegerArgumentType.integer(1, 24))
+                    .then(literal("goal").then(argument("slot", IntegerArgumentType.integer(1, 256))
                         .then(argument("value", StringArgumentType.word())
                             .executes(c -> updateProfile(c.getSource(), IntegerArgumentType.getInteger(c, "slot"), "goal", StringArgumentType.getString(c, "value"))))))
-                    .then(literal("relation").then(argument("from", IntegerArgumentType.integer(1, 24))
-                        .then(argument("to", IntegerArgumentType.integer(1, 24))
+                    .then(literal("relation").then(argument("from", IntegerArgumentType.integer(1, 256))
+                        .then(argument("to", IntegerArgumentType.integer(1, 256))
                             .then(argument("role", StringArgumentType.word())
                                 .executes(c -> relationshipRole(c.getSource(), IntegerArgumentType.getInteger(c, "from"), IntegerArgumentType.getInteger(c, "to"), StringArgumentType.getString(c, "role")))))))
                 )
@@ -1001,24 +1001,24 @@ public class DoppelgangerMod implements ModInitializer {
                         .executes(c -> regionOn(c.getSource(), IntegerArgumentType.getInteger(c, "radius")))))
                     .then(literal("off").executes(c -> regionOff(c.getSource()))))
                 .then(literal("control")
-                    .then(literal("select").then(argument("slot", IntegerArgumentType.integer(1, 24))
+                    .then(literal("select").then(argument("slot", IntegerArgumentType.integer(1, 256))
                         .executes(c -> controlNao(c.getSource(), IntegerArgumentType.getInteger(c, "slot")))))
                     .then(literal("release").executes(c -> controlRelease(c.getSource()))))
-                .then(literal("plan").then(argument("slot", IntegerArgumentType.integer(1, 24))
+                .then(literal("plan").then(argument("slot", IntegerArgumentType.integer(1, 256))
                     .executes(c -> planStatus(c.getSource(), IntegerArgumentType.getInteger(c, "slot")))))
                 .then(literal("growth").then(literal("propose")
-                    .then(argument("slot", IntegerArgumentType.integer(1, 24))
+                    .then(argument("slot", IntegerArgumentType.integer(1, 256))
                         .executes(c -> growthProposal(c.getSource(), IntegerArgumentType.getInteger(c, "slot"))))))
                 .then(literal("social")
                     .then(literal("talk")
-                        .then(argument("from", IntegerArgumentType.integer(1, 24))
-                            .then(argument("to", IntegerArgumentType.integer(1, 24))
+                        .then(argument("from", IntegerArgumentType.integer(1, 256))
+                            .then(argument("to", IntegerArgumentType.integer(1, 256))
                                 .executes(c -> socialTalk(c.getSource(),
                                     IntegerArgumentType.getInteger(c, "from"),
                                     IntegerArgumentType.getInteger(c, "to"))))))
                     .then(literal("status")
-                        .then(argument("from", IntegerArgumentType.integer(1, 24))
-                            .then(argument("to", IntegerArgumentType.integer(1, 24))
+                        .then(argument("from", IntegerArgumentType.integer(1, 256))
+                            .then(argument("to", IntegerArgumentType.integer(1, 256))
                                 .executes(c -> socialStatus(c.getSource(),
                                     IntegerArgumentType.getInteger(c, "from"),
                                     IntegerArgumentType.getInteger(c, "to"))))))
@@ -1030,9 +1030,9 @@ public class DoppelgangerMod implements ModInitializer {
                         .then(literal("status").executes(c -> say(c.getSource(),
                             "Stand-in walking animation " + (mannequinAnimation ? "ON" : "OFF"))))))
                 .then(literal("appearance")
-                    .then(literal("status").then(argument("slot", IntegerArgumentType.integer(1, 24))
+                    .then(literal("status").then(argument("slot", IntegerArgumentType.integer(1, 256))
                         .executes(c -> appearanceStatus(c.getSource(), IntegerArgumentType.getInteger(c, "slot")))))
-                    .then(literal("set").then(argument("slot", IntegerArgumentType.integer(1, 24))
+                    .then(literal("set").then(argument("slot", IntegerArgumentType.integer(1, 256))
                         .then(argument("skinKey", StringArgumentType.word())
                             .executes(c -> appearanceSet(c.getSource(),
                                 IntegerArgumentType.getInteger(c, "slot"),
@@ -1046,7 +1046,7 @@ public class DoppelgangerMod implements ModInitializer {
                 .then(literal("status").executes(c -> status(c.getSource())))
                 .then(literal("logs").executes(c -> showReports(c.getSource())))
                 .then(literal("npc").then(literal("report").executes(c -> npcReport(c.getSource()))))
-                .then(literal("select").then(argument("id", IntegerArgumentType.integer(1, 24))
+                .then(literal("select").then(argument("id", IntegerArgumentType.integer(1, 256))
                     .executes(c -> select(c.getSource(), IntegerArgumentType.getInteger(c, "id")))))
                 .then(literal("preference").then(argument("reason", StringArgumentType.word())
                     .then(argument("strength", IntegerArgumentType.integer(0, 10))
@@ -1534,7 +1534,7 @@ public class DoppelgangerMod implements ModInitializer {
             logMIP("Switched " + (enabled ? "ON" : "OFF") + " by command");
             if (enabled && memories != null) {
                 memories.flush();
-                logMIP(MemoryIntegrationPatch.integrate(memories.directory()));
+                logMIP(integrateAndReplicate());
             }
             return say(src, "MIP " + (enabled ? "ON" : "OFF") + " (setting saved).");
         } catch (IOException e) {
@@ -1550,7 +1550,8 @@ public class DoppelgangerMod implements ModInitializer {
                 memories = new PersonalityMemoryStore(
                     FabricLoader.getInstance().getGameDir().resolve("config/doppelganger/memories"));
             memories.flush();
-            String result = MemoryIntegrationPatch.integrate(memories.directory());
+            String result = integrateAndReplicate();
+            if (sharedKnowledge != null) sharedKnowledge.refresh();
             logMIP(result);
             return say(src, result);
         } catch (IOException e) {
