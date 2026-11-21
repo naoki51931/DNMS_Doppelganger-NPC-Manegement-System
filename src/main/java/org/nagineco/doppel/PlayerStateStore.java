@@ -72,7 +72,8 @@ public final class PlayerStateStore {
     public static void restore(ServerPlayerEntity player, State s) throws IOException {
         if (!player.getServerWorld().getRegistryKey().getValue().toString().equals(s.dimension))
             throw new IOException("Player must be in saved dimension " + s.dimension);
-        if (s.inventory.stream().anyMatch(slot -> !Registries.ITEM.containsId(Identifier.of(slot.item))))
+        if (s.inventory.stream().anyMatch(slot -> slot.index >= player.getInventory().size()
+                || !Registries.ITEM.containsId(Identifier.of(slot.item))))
             throw new IOException("Snapshot references unknown items");
         player.getInventory().clear();
         for (Slot slot : s.inventory)
