@@ -611,11 +611,15 @@ public class DoppelgangerMod implements ModInitializer {
                 if (loopTick % 20 == 0)
                     NaoLifeAI.plan(nao, sharedKnowledge, world, previous, time);
                 if (nao.goal == NaoLifeStore.Goal.COLLECT && loopTick % 100 == 0
-                        && nao.energy >= 20 && NaoWorkPatch.harvest(world, previous, nao)) {
+                        && nao.energy >= 20) {
+                    boolean harvested = NaoWorkPatch.harvest(world, previous, nao);
+                    life.observeAction(i, NaoActionLearning.Action.COLLECT, harvested);
+                    if (harvested) {
                     if (rewardLearning) NaoRlpPatch.record(nao, NaoLifeStore.Goal.COLLECT, 5);
                     report("Nao " + nao.number + " " + nao.lastOutcome);
                     if (memories != null) memories.rememberEvent(i, day, loopTick,
                         "npc_collect", nao.lastOutcome);
+                    }
                 }
                 HabitBrain.Move move = NaoLifeAI.move(nao, brains, i, loopTick,
                     memories, rewardLearning, sharedKnowledge, previous);
