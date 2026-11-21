@@ -1,5 +1,12 @@
 # Doppel NPC Management System (DNMS)
 
+## Post-24 free-play day advance and playable Nao (2026-11-21)
+
+After all **24 Nao identities** have been trained and `freePlay` is active, the external day-advance command `/doppel day next` starts the following Minecraft day at 06:00 (world time tick 0) **without recreating NPCs, resetting their AI, restoring blocks, or erasing world events**. It checkpoints before changing days, keeps each NPC's goal/brain, position and relationship state, and saves the new day. The legacy `/doppel next` remains supported in free-play.
+
+Use `/doppel control select <1..24>` to make a particular NPC the **playable Nao**. The player's avatar teleports to that Nao's current position, the selected NPC stand-in pauses its autonomous movement, and the other Nao NPCs continue their AI. The player's experience while controlling that Nao is recorded to that Nao's personal journal as `playable_experience` every 20 ticks; their position is persisted. `/doppel control release` returns to the owner avatar. `/doppel select <slot>` is only a teleport/view selection, **not** playable-identity assignment. This is an avatar-routing MVP, not independent player-entity possession or full inventory swapping. All 24 must exist before the new day-advance command is enabled.
+
+
 ## Authoritative current implementation and limitations (2026-11-21)
 
 - **Configurable MIP:** `/doppel mip time HH:mm` accepts 00:00–23:59, persists `mip.time`, and uses the Minecraft clock (default 00:00 / tick 18000). Skipped crossings are caught up where possible, with a durable `mip-completed.txt` integration key to suppress repeats. `/doppel next` also attempts pending integration before advancing; the journal merge is not a fully transactional guarantee.
