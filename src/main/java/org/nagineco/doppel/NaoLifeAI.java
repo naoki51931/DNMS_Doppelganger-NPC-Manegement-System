@@ -30,6 +30,7 @@ public final class NaoLifeAI {
                 default -> 0;
             };
             double candidate = Math.log1p(memory.evidence(goal)) * 0.5
+                + NaoRlpPatch.preference(nao, goal) * 0.4
                 + Math.log1p(skill) * 0.15
                 + ((tick / 1200 + nao.number * 7L + i * 13L) % 17) * 0.1;
             if (candidate > score) { score = candidate; best = i; }
