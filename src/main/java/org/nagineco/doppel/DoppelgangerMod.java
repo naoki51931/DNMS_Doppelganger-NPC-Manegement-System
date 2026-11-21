@@ -99,6 +99,64 @@ public class DoppelgangerMod implements ModInitializer {
             + ", trust=" + r.trust() + ", affection=" + r.affection()
             + ", romanceOptIn=" + r.romanceOptIn());
     }
+    /** Lightweight context-based dialogue, not generative language understanding. */
+    private static void autonomousSocialTick() {
+        if (!lifeAiEnabled || social == null || life == null || memories == null) return;
+        if (loopTick % 400 != 0 || ghosts.size() < 2) return;
+        var engine = social.engine();
+        for (int i = 0; i < ghosts.size() && i < life.count(); i++) {
+            if (ghosts.get(i).isRemoved()) continue;
+            int partner = -1;
+            double distance = 36.0;
+            for (int j = 0; j < ghosts.size() && j < life.count(); j++) {
+                if (i == j || ghosts.get(j).isRemoved()) continue;
+                double d = ghosts.get(i).getPos().squaredDistanceTo(ghosts.get(j).getPos());
+                if (d < distance) { distance = d; partner = j; }
+            }
+            if (partner < 0 || i > partner) continue; // One conversation per pair.
+            UUID a = UUID.fromString(life.get(i).id);
+            UUID b = UUID.fromString(life.get(partner).id);
+            var beforeA = engine.get(a, b);
+            var beforeB = engine.get(b, a);
+            String[] topics = {
+                "今日は何を見つけた？", "この辺りを一緒に歩いてみよう。",
+                "最近、何を作りたい？", "少し休んで、また探検しよう。",
+                "手伝えることがあったら教えて。"
+            };
+            String line = topics[Math.floorMod(day + i + partner + loopTick / 400, topics.length)];
+            engine.apply(a, b, org.nagineco.doppel.social.NaoRelationshipEngine.Interaction.TALK);
+            engine.apply(b, a, org.nagineco.doppel.social.NaoRelationshipEngine.Interaction.TALK);
+            life.learn(i, NaoLifeStore.Goal.SOCIAL);
+            life.learn(partner, NaoLifeStore.Goal.SOCIAL);
+            life.observeAction(i, NaoActionLearning.Action.TALK, true);
+            life.observeAction(partner, NaoActionLearning.Action.TALK, true);
+            memories.rememberEvent(i, day, loopTick, "npc_dialogue",
+                "to=Nao" + (partner + 1) + " text=" + line);
+            memories.rememberEvent(partner, day, loopTick, "npc_dialogue",
+                "from=Nao" + (i + 1) + " text=" + line);
+            report("Nao " + (i + 1) + " -> Nao " + (partner + 1) + ": " + line);
+            // Romance is mutual and gradual. Neither participant can unilaterally
+            // force a relationship; each independently opts in after familiarity.
+            if (beforeA.familiarity() >= 12 && beforeA.trust() >= 50
+                    && beforeB.familiarity() >= 12 && beforeB.trust() >= 50) {
+                if (!beforeA.romanceOptIn()) engine.setRomanceOptIn(a, b, true);
+                if (!beforeB.romanceOptIn()) engine.setRomanceOptIn(b, a, true);
+                var ra = engine.apply(a, b,
+                    org.nagineco.doppel.social.NaoRelationshipEngine.Interaction.ROMANCE_REQUEST);
+                var rb = engine.apply(b, a,
+                    org.nagineco.doppel.social.NaoRelationshipEngine.Interaction.ROMANCE_REQUEST);
+                if (ra.affection() > beforeA.affection() && rb.affection() > beforeB.affection()) {
+                    memories.rememberEvent(i, day, loopTick, "npc_romance",
+                        "mutual relationship with Nao" + (partner + 1));
+                    memories.rememberEvent(partner, day, loopTick, "npc_romance",
+                        "mutual relationship with Nao" + (i + 1));
+                    report("Nao " + (i + 1) + " and Nao " + (partner + 1)
+                        + " grew closer by mutual choice.");
+                }
+            }
+        }
+    }
+
     private static NaoRegionRollback regionSnapshot;
     private static boolean regionRollbackEnabled;
     private static final NaoControlSession controlSession = new NaoControlSession();
@@ -827,6 +885,7 @@ public class DoppelgangerMod implements ModInitializer {
                 }
             }
         }
+        autonomousSocialTick();
         long serverTick = server.getTicks();
         if (serverTick - lastCheckpointTick >= 1200 || lastCheckpointTick == Long.MIN_VALUE) {
             try { saveSession(); lastCheckpointTick = serverTick; }
