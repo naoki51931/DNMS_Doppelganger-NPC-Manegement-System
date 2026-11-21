@@ -20,10 +20,11 @@ public final class SharedMemoryReader {
     private long modified = Long.MIN_VALUE;
     private final EnumMap<NaoLifeStore.Goal, Integer> knowledge = new EnumMap<>(NaoLifeStore.Goal.class);
     private List<Experience> experiences = List.of();
+    private double[] packed = new double[0];
     public SharedMemoryReader(Path path) { this.path = path; }
     public void refresh() throws IOException {
         if (!Files.isRegularFile(path)) {
-            knowledge.clear(); experiences = List.of(); modified = Long.MIN_VALUE; return;
+            knowledge.clear(); experiences = List.of(); packed = new double[0]; modified = Long.MIN_VALUE; return;
         }
         long timestamp = Files.getLastModifiedTime(path).toMillis();
         if (timestamp == modified) return;
@@ -55,6 +56,16 @@ public final class SharedMemoryReader {
         }
         knowledge.clear(); knowledge.putAll(next);
         experiences = List.copyOf(events);
+        packed = new double[events.size() * 5];
+        for (int i = 0; i < events.size(); i++) {
+            Experience e = events.get(i);
+            int offset = i * 5;
+            packed[offset] = e.position().x;
+            packed[offset + 1] = e.position().y;
+            packed[offset + 2] = e.position().z;
+            packed[offset + 3] = goal(e.reason()).ordinal();
+            packed[offset + 4] = e.action() == HabitBrain.Move.STAY ? 0 : 1;
+        }
         modified = timestamp;
     }
     private static NaoLifeStore.Goal goal(HabitBrain.Reason reason) {
@@ -71,6 +82,11 @@ public final class SharedMemoryReader {
     public int entries() { return experiences.size(); }
     /** Nearest matching experience from ANY Nao, bounded to the current area. */
     public Optional<Experience> nearest(NaoLifeStore.Goal goal, Vec3d current, double radius) {
+        if (NativeMemorySearch.available() && experiences.size() >= 128) {
+            int index = NativeMemorySearch.nearestIndex(packed, experiences.size(), goal.ordinal(),
+                current.x, current.y, current.z, radius * radius);
+            return index < 0 ? Optional.empty() : Optional.of(experiences.get(index));
+        }
         Experience best = null;
         double distance = radius * radius;
         for (Experience e : experiences) {
