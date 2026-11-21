@@ -1,41 +1,36 @@
 # Doppelganger NPC System
 
-A C++17 prototype inspired by a Minecraft-style world containing 24 doppelganger characters.
+C++17 prototype for a Minecraft-inspired world of 24 doppelganger characters.
 
-## Concept
+## Integrated simulator (recommended)
 
-- Play each character during a training round.
-- Learn a simple habit policy from observed situations and actions.
-- Convert completed characters into autonomous NPCs, clearing their short-term episodic history while retaining learned habits.
-- Select any of 24 characters as the playable character; the previous one resumes NPC behavior.
-- Preserve simulated position and collected wood when switching.
-
-## Current prototype
-
-This repository contains **two separate console demos**, not yet a Minecraft mod or server plugin.
-
-- `src/doppel_npc.cpp`: 24 training rounds, a frequency-based habit learner, and conversion to NPC. Human input is simulated by `demoHumanChoice`.
-- `src/doppel_switch.cpp`: interactive switching among 24 characters. NPC habits are currently fixed alternating behaviors; this demo is **not yet integrated** with the learner.
-
-## Build
-
-Requires a C++17 compiler:
+`src/doppel_integrated.cpp` combines **24 training rounds**, habit learning, NPC autonomy, episodic-memory clearing and unlimited character switching.
 
 ```bash
-g++ -std=c++17 -O2 src/doppel_npc.cpp -o doppel_npc
-g++ -std=c++17 -O2 src/doppel_switch.cpp -o doppel_switch
-./doppel_npc
-./doppel_switch
+g++ -std=c++17 -O2 -Wall -Wextra src/doppel_integrated.cpp -o doppel
+./doppel
 ```
 
-In the switching demo, enter `1`–`24` to switch, `a`/`d` to move, `w` to collect wood, `t` to advance NPCs, and `q` to quit.
+1. Control character #1 using `w/a/s/d` (movement), `g` (gather), `f` (flee), or `.` (wait).
+2. Type `next` to finish the round: the character becomes an NPC using a frequency-based learned policy. Its temporary episode log is cleared, but its learned habits and world state remain.
+3. Repeat through all 24 characters. Earlier NPCs act once per command/tick while the current character is controlled.
+4. After all 24 rounds, type `select 1` through `select 24` to take control of any character. The other 23 act as NPCs; switching is unlimited.
+5. Type `status` to inspect all characters, or `quit` to exit.
 
-## Planned work
+Each NPC's learned policy maps a simplified observation (tree/night/danger) to its most frequently demonstrated action. If a situation was never demonstrated, the NPC waits. The world is a small simulated grid, not Minecraft itself.
 
-1. Integrate habit learning and character switching into one runtime.
-2. Record real player actions and world observations.
-3. Persist per-character policies and world state.
-4. Connect to a Minecraft-compatible server or mod API.
-5. Add continuous simulation, navigation, inventory and richer action policies.
+**Limitations:** this is a console prototype; it does not connect to Minecraft, use real keyboard/mouse events, save progress to disk, or implement pathfinding/complex imitation learning. NPC actions advance when the player enters an action, not continuously in background time. In free-play, player actions do not update the NPC habit policy.
 
-This prototype does not claim to model consciousness or transfer subjective experience.
+## Earlier standalone examples
+
+- `src/doppel_npc.cpp`: demonstration-based NPC conversion using scripted human choices.
+- `src/doppel_switch.cpp`: 24-character switching with fixed sample habits.
+
+## Roadmap
+
+- Minecraft integration (mod or compatible server API)
+- Persist world state, learned habits, and current playable character
+- Real observations/actions and better behavior imitation
+- Optional continuous tick loop, navigation and inventory systems
+
+This simulation models behavior, not subjective consciousness.
