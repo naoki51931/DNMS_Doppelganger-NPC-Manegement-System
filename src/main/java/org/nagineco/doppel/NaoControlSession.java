@@ -11,7 +11,7 @@ public final class NaoControlSession {
     public record Selection(Mode mode, int slot, UUID logicalId) {
         public Selection {
             Objects.requireNonNull(mode);
-            if (mode == Mode.NPC && (slot < 1 || slot > 24 || logicalId == null))
+            if (mode == Mode.NPC && (slot < 1 || slot > 256 || logicalId == null))
                 throw new IllegalArgumentException("invalid NPC selection");
             if (mode == Mode.OWNER && (slot != 0 || logicalId != null))
                 throw new IllegalArgumentException("invalid owner selection");
