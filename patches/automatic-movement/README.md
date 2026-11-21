@@ -1,5 +1,18 @@
 # Automatic Movement Patch (AMP)
 
+<!-- DNMS_PATCH_BILINGUAL_CURRENT_BEGIN -->
+
+## 日本語ガイド（現行仕様）
+AMPはプレイアブル奈央の水平方向の移動をサーバー側で自動制御する任意パッチです。初期値はOFFで、`/doppel automove on|off|status` で切り替えます。`/doppel logs` で選択方向の報告を確認できます。共通人格 `nao_personality.md` と学習済みの移動習慣を利用し、プレイアブル本人の学習モデルには2倍の重みを与えます。根拠がなければ静止します。上下方向の速度は維持します。
+自動移動中の動作を人間の訓練例として再学習しないようにしています。地面・衝突・足場・液体を保守的に確認しますが、経路探索や落下回避の保証はありません。平坦な安全な場所で検証してください。Java 21 / Fabric 1.21.1が対象です。
+
+## English Guide (Current Behavior)
+AMP provides optional server-side horizontal movement for the playable Nao. It defaults to OFF; use `/doppel automove on|off|status` and inspect reports with `/doppel logs`. It uses the shared `nao_personality.md` and learned movement habits, with double weight for the playable Nao's own model; insufficient evidence results in staying still. Vertical velocity is preserved.
+AMP-generated movement is excluded from human demonstration learning to avoid feedback loops. Conservative checks cover grounding, collision, support and fluids, but do not guarantee pathfinding or fall safety. Test on safe flat terrain. Target: Java 21 / Fabric 1.21.1.
+
+<!-- DNMS_PATCH_BILINGUAL_CURRENT_END -->
+
+
 AMP adds opt-in, server-side automatic horizontal movement for the playable Nao in DNMS.
 
 ## Commands
