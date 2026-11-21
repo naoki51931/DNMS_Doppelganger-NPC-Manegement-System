@@ -55,3 +55,17 @@ When connecting this patch to the live mod, document the invocation point
 (e.g. after 24 daily runs), flush individual journals first, and implement a
 single authoritative loading strategy to prevent duplicated training data.
 World-state rollback and actual NPC control remain separate workstreams.
+
+
+## Integration lifecycle contract
+
+The Fabric build includes this patch as a Java source directory. MIP defaults
+to enabled, with the operator override stored at
+`config/doppelganger/mip.enabled`. Integrate only after flushing individual
+journals. Commands: `/doppel mip status|logs|run|on|off`.
+
+Turning OFF must be reversible and must never delete personal journals,
+shared personality or the derived index. Emit console messages by default
+and expose the last 20 through the logs command. Maintain the standalone CLI
+as well as the callable `integrate(Path)` API. Do not claim the generated
+index directly affects AI decisions until a separate consumer is implemented.
