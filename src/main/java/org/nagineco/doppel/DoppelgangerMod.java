@@ -839,7 +839,6 @@ public class DoppelgangerMod implements ModInitializer {
     private static int next(ServerCommandSource src) {
         if (!recording) return say(src, "Start with /doppel start.");
         if (freePlay) {
-            integrateMidnightBeforeReset();
             try { saveSession(); }
             catch (IOException ex) { return say(src, "Day not advanced because save failed: " + ex.getMessage()); }
             day++;
@@ -849,7 +848,6 @@ public class DoppelgangerMod implements ModInitializer {
         }
         ServerPlayerEntity player = src.getServer().getPlayerManager().getPlayer(owner);
         if (player == null) return say(src, "Owner is offline.");
-        integrateMidnightBeforeReset();
         // Default: clock + owner position only; bounded block rewind requires opt-in.
         if (regionRollbackEnabled && regionSnapshot != null) {
             try { regionSnapshot.restore(); }
@@ -969,7 +967,7 @@ public class DoppelgangerMod implements ModInitializer {
 
     private static int mipStatus(ServerCommandSource src) {
         return say(src, "MIP " + (mipEnabled ? "ON" : "OFF")
-            + " | daily at " + formatMinecraftClock(mipScheduleTick)
+            + " | daily at 00:00"
             + " (tick " + mipScheduleTick + ")"
             + " | recent log entries: " + mipLog.size()
             + " | integrated index: " + (memories != null
@@ -1015,6 +1013,9 @@ public class DoppelgangerMod implements ModInitializer {
     private static void tickMIP(MinecraftServer server) {
         if (!mipEnabled || !recording || world == null || memories == null) return;
         long current = world.getTimeOfDay();
+        // The user-selected schedule is retained for compatibility, but daily
+        // shared-memory integration always runs at Minecraft midnight.
+        final int integrationTick = 18000;
         if (!scheduleInitialized) {
             lastObservedTime = current;
             scheduleInitialized = true;
@@ -1026,31 +1027,16 @@ public class DoppelgangerMod implements ModInitializer {
         // On large forward jumps, do not execute missed schedules in a burst.
         if (current <= previous || current - previous > 20) return;
         long dayIndex = Math.floorDiv(current, DAY_TICKS);
-        long target = dayIndex * DAY_TICKS + mipScheduleTick;
+        long target = dayIndex * DAY_TICKS + integrationTick;
         if (previous < target && current >= target && dayIndex != lastScheduledDay) {
             lastScheduledDay = dayIndex;
             try {
                 memories.flush();
-                logMIP("Daily " + formatMinecraftClock(mipScheduleTick) + ": "
+                logMIP("Daily 00:00: "
                     + MemoryIntegrationPatch.integrate(memories.directory()));
             } catch (IOException ex) {
                 logMIP("Daily integration failed: " + ex.getMessage());
             }
-        }
-    }
-
-    private static void integrateMidnightBeforeReset() {
-        // A training loop resets the Minecraft clock at 06:00, so integrate
-        // at the 00:00 boundary of that loop even if the operator advances
-        // before a natural midnight tick. Never change the sample weights.
-        if (!mipEnabled || memories == null) return;
-        try {
-            memories.flush();
-            logMIP("Training-loop midnight (00:00): "
-                + MemoryIntegrationPatch.integrate(memories.directory()));
-            if (sharedKnowledge != null) sharedKnowledge.refresh();
-        } catch (IOException ex) {
-            logMIP("Training-loop midnight integration failed: " + ex.getMessage());
         }
     }
 
