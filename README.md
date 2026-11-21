@@ -1,5 +1,19 @@
 # Doppel NPC Management System (DNMS)
 
+## Novel canon vs. Minecraft prototype (authoritative design boundary)
+
+The **novel's outer-world DNMS** and the **Minecraft mod's technical prototype** are not identical implementations. Preserve the following fictional rules; do not silently turn optional engineering experiments into canonical story mechanics:
+
+- **Loop reset:** only the outer/playable Nao's position and the clock return to the starting point (06:00). The city/world's events, buildings, terrain, and other people's lived history **do not rewind**. Existing inner Naos remain in the world, with one additional Nao created per cycle up to 24.
+- **Shared self:** the 24 inner Naos share **one personality** and can share/integrate learned experiences; their individual experiences and relationships can still differ. The playable Nao receives personality-change **proposals**, not unapproved automatic rewrites.
+- **Server shutdown in the novel:** the story's unsaved memories of **all humans** are lost when its simulation server stops. This is a fictional memory-loss rule, **not** a claim that Minecraft's persistent JSON/Markdown saves are automatically erased by `/doppel stop`. Do not change real-world save/recovery code to delete files just to imitate the story.
+- **Coincident Naos:** two Naos awakening at exactly the same coordinates initially overlap; collision applies when they separate. The Minecraft armor-stand prototype does **not** yet implement this special collision behavior.
+- **Optional `/doppel region on`:** experimental **non-canonical** bounded block-state rollback for testing. It is OFF by default and must **not** become part of the normal daily reset. Full-world rewind is **not a novel requirement** and must not be enabled as default.
+- **Possession:** the story's complete perspective/control transfer to one of the 24 is a desired mechanic. The current mod's `/doppel control select` only relocates the existing player avatar and pauses the selected stand-in; full possession is still missing.
+
+This section defines **story consistency**, not a claim that the mod already implements these behaviors.
+
+
 **DNMS** (formerly Doppelganger NPC System) is an experimental Minecraft Java Edition **Fabric 1.21.1** server mod plus C++ console prototypes for a 24-character daily loop.
 
 ## Fabric mod (early MVP)
@@ -359,7 +373,7 @@ This is a **partial foundation**, not seven completed Minecraft features. The us
 | 24 visually authentic player NPCs | Stable 24 UUIDs, `skinKey`, appearance commands, vanilla player-head mannequin with limb animation ON by default | **Still armor stands**. Dedicated humanoid entity, Fabric client renderer, actual player skin loading, entity animations and chunk lifecycle missing |
 | Mining, building, item collection learning | `NaoActionLearning` confidence model; `NaoLifeStore` persists per-Nao action attempts/successes; actual NPC log collection now records attempts and outcomes | Mining diverse blocks, real construction/placing, craft and inventory fidelity, safe building protection, pathfinding, demonstration capture and real learned action selection missing. Current log harvesting is potentially destructive; back up worlds |
 | Conversation, romance, relationships | `NaoRelationshipEngine` directed relationships, mutual romance opt-in guard, `NaoSocialStore` JSON persistence, `/doppel social talk <from> <to>` and `/doppel social status <from> <to>` | Autonomous conversations, language generation, real dialogue UI, autonomous relationship dynamics, explicit romance opt-in command/UI and relationship checkpoint integration missing. Manual talk event is **not** a conversation |
-| Full Minecraft world rewind | `NaoWorldRollbackPlan` opt-in policy and bounded journal contract (pure Java, not connected) | **No world rollback**. Block entity NBT, entities, player inventories, chunks, dimensions, other players, durable snapshots, consistency and atomic restore missing. `FULL_WORLD` explicitly rejects activation. Default remains clock + outer player's position |
+| Optional non-canonical Minecraft world rollback | `NaoWorldRollbackPlan` opt-in policy and bounded journal contract (pure Java, not connected) | **No world rollback**. Block entity NBT, entities, player inventories, chunks, dimensions, other players, durable snapshots, consistency and atomic restore missing. `FULL_WORLD` explicitly rejects activation. Default remains clock + outer player's position |
 | Fully control any of 24 | `NaoControlSession` validated selection state machine (not connected); existing `/doppel select` teleports | Input ownership, network packets, entity/player substitution, inventory and camera control, suspending selected AI and resuming owner missing. **No real possession** |
 | Advanced decisions directly from integrated memory | Existing `SharedMemoryReader` reads integrated structured events, supports nearest-experience and evidence-based goal scoring in `NaoLifeAI` | Semantic retrieval, planning with actions and outcomes, causal evaluation, robust spatial memory, integrated decision audit and quality evaluation missing |
 | Personality growth from experience | `NaoPersonalityGrowth` generates bounded, evidence-backed suggestions after >=10 observations | Not connected to live events or persistence/approval UI. **Never silently rewrite authoritative `nao_personality.md`**; owner review and approval workflow missing |
@@ -385,7 +399,7 @@ These changes are **unverified by CI and Minecraft runtime**; batch build errors
 
 ### Outstanding work
 
-1. Implement durable, consistent, multi-dimension **full-world** snapshots/restore with block entities, entities, inventories, schedules and crash-safe commit. Current implementation is a small block-only cube, not full-world rollback.
+1. If optional non-canonical rollback is retained for testing, improve snapshot consistency and safety; do **not** implement or enable full-world rollback as part of the novel's default loop. Current experimental implementation is a small block-only cube.
 2. Replace armor stands with actual player-model entities and support complete avatar/identity/inventory control transfer. Current control is player-avatar movement mirrored to a stand-in.
 3. Build a multi-step planner with execution, retry, resource requirements and success/failure feedback. Current MIP planner selects a goal, not a full plan.
 4. Persist and present growth proposals with explicit owner approval, versioned personality updates, audit trail, and conflict handling.
