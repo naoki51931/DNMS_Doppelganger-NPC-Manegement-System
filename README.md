@@ -286,3 +286,10 @@ Implementation order and status:
 - **Unresolved build/runtime:** no Java 21/Fabric 1.21.1 compilation or in-game test has been completed for these changes. Do not represent implementation as verified.
 
 **Future maintenance:** consolidate superseded sections rather than leaving conflicting historical statements; verify `/doppel start`, `next`, `resume`, `stop`, MIP and both opt-in toggles against actual code, then build and test on a disposable world. Keep one shared `nao_personality.md` and independent `nao_01.md`–`nao_24.md` journals.
+
+
+### Stage 2 update: actionable shared MIP experience lookup (2026-11-21)
+
+The experimental life AI now reads structured MIP events (source Nao ID, day, tick, position, move, motivation) using `SharedMemoryReader`. Each NPC consults **the same shared read-only index**: for its current goal, it searches for the nearest matching movement experience within 16 blocks and can use that move. If none is found, it falls back to the shared `HabitBrain` policy. `NaoLifeAI.chooseGoal` continues to use integrated motivation counts. Source `nao_XX.md` journals and the sole `nao_personality.md` are not replaced or modified by this lookup; MIP events are not re-trained into HabitBrain. The feature is active only with `/doppel life on` and MIP index data available. MIP still generates the index on the configured Minecraft clock or `/doppel mip run`.
+
+**Limitations / future work:** This is structured event retrieval, not semantic LLM memory or guaranteed safe pathfinding. An event's source Nao ID is retained for traceability but not privileged in retrieval. Nearest-event selection can repeatedly prefer one observation and may choose movement into a wall (existing collision guard prevents entering solid blocks). The 16-block search and matching-goal heuristic are provisional. Missing/stale integrated memory falls back to the existing learned movement model. Build and in-game validation are still pending.
