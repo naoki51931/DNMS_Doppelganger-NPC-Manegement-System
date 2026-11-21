@@ -224,6 +224,7 @@ public class DoppelgangerMod implements ModInitializer {
     private static boolean mipEnabled = true;
     private static int mipScheduleTick = 18000; // Minecraft midnight, 00:00
     private static long lastScheduledDay = Long.MIN_VALUE;
+    private static int lastIntegratedTrainingDay = Integer.MIN_VALUE;
     private static long lastObservedTime = Long.MIN_VALUE;
     private static boolean scheduleInitialized = false;
     private static Path mipScheduleFile() {
@@ -296,6 +297,13 @@ public class DoppelgangerMod implements ModInitializer {
     private static Path playerSnapshotFile() {
         return FabricLoader.getInstance().getGameDir().resolve("config/doppelganger/player.json");
     }
+    private static void rememberGhostPositions() {
+        if (life == null) return;
+        for (int i = 0; i < ghosts.size() && i < life.count(); i++) {
+            ArmorStandEntity stand = ghosts.get(i);
+            if (!stand.isRemoved()) life.rememberPosition(i, stand.getX(), stand.getY(), stand.getZ());
+        }
+    }
     private static void saveSession() throws IOException {
         if (memories == null) return;
         memories.flush();
@@ -306,6 +314,7 @@ public class DoppelgangerMod implements ModInitializer {
             throw new IOException("Playable Nao must be online in the recording dimension to checkpoint");
         Path playerFile = playerSnapshotFile();
         PlayerStateStore.save(playerFile, player);
+        rememberGhostPositions();
         if (life != null) life.save();
         if (social != null) social.save();
         GenerationCheckpointStore.publish(checkpointRoot(), snapshotFile(),
@@ -664,6 +673,7 @@ public class DoppelgangerMod implements ModInitializer {
         report("Playable Nao training started; automatic observation enabled.");
         scheduleInitialized = false;
         lastScheduledDay = Long.MIN_VALUE;
+        lastIntegratedTrainingDay = Integer.MIN_VALUE;
         growthObserved = Long.MIN_VALUE;
         growthDay = Long.MIN_VALUE;
         return say(src, "Day 1, loop 1/24. Play, then /doppel next.");
@@ -832,6 +842,7 @@ public class DoppelgangerMod implements ModInitializer {
     private static int next(ServerCommandSource src) {
         if (!recording) return say(src, "Start with /doppel start.");
         if (freePlay) {
+            integrateTrainingMidnight();
             try { saveSession(); }
             catch (IOException ex) { return say(src, "Day not advanced because save failed: " + ex.getMessage()); }
             day++;
@@ -841,6 +852,7 @@ public class DoppelgangerMod implements ModInitializer {
         }
         ServerPlayerEntity player = src.getServer().getPlayerManager().getPlayer(owner);
         if (player == null) return say(src, "Owner is offline.");
+        integrateTrainingMidnight();
         // Default: clock + owner position only; bounded block rewind requires opt-in.
         if (regionRollbackEnabled && regionSnapshot != null) {
             try { regionSnapshot.restore(); }
@@ -889,9 +901,12 @@ public class DoppelgangerMod implements ModInitializer {
         for (int i = 0; i < count; i++) {
             if (i < ghosts.size() && !ghosts.get(i).isRemoved()) continue;
             ArmorStandEntity stand = new ArmorStandEntity(EntityType.ARMOR_STAND, world);
-            Vec3d pos = i < ghosts.size() && ghosts.get(i).isRemoved()
-                ? ghosts.get(i).getPos()
-                : (tracks.get(i).isEmpty() ? Vec3d.ofCenter(dawn) : tracks.get(i).get(0));
+            NaoLifeStore.Nao persisted = life != null && i < life.count() ? life.get(i) : null;
+            Vec3d pos = persisted != null && persisted.hasPosition
+                ? new Vec3d(persisted.posX, persisted.posY, persisted.posZ)
+                : (i < ghosts.size() && ghosts.get(i).isRemoved()
+                    ? ghosts.get(i).getPos()
+                    : (tracks.get(i).isEmpty() ? Vec3d.ofCenter(dawn) : tracks.get(i).get(0)));
             stand.refreshPositionAndAngles(pos.x, pos.y, pos.z, 0, 0);
             stand.setNoGravity(true);
             stand.setInvulnerable(true);
@@ -1001,34 +1016,37 @@ public class DoppelgangerMod implements ModInitializer {
         return say(src, "MIP runs at Minecraft 00:00.");
     }
 
+    private static void integrateTrainingMidnight() {
+        if (!mipEnabled || memories == null || lastIntegratedTrainingDay == day) return;
+        try {
+            memories.flush();
+            logMIP("Daily 00:00 (day " + day + "): "
+                + MemoryIntegrationPatch.integrate(memories.directory()));
+            if (sharedKnowledge != null) sharedKnowledge.refresh();
+            lastIntegratedTrainingDay = day;
+        } catch (IOException ex) {
+            logMIP("Daily integration failed, will retry: " + ex.getMessage());
+        }
+    }
+
     private static void tickMIP(MinecraftServer server) {
         if (!mipEnabled || !recording || world == null || memories == null) return;
         long current = world.getTimeOfDay();
-        // The user-selected schedule is retained for compatibility, but daily
-        // shared-memory integration always runs at Minecraft midnight.
-        final int integrationTick = 18000;
-        if (!scheduleInitialized) {
-            lastObservedTime = current;
-            scheduleInitialized = true;
-            return;
-        }
         long previous = lastObservedTime;
         lastObservedTime = current;
-        // Ignore time jumps backwards (including the 24 training-loop rewinds).
-        // On large forward jumps, do not execute missed schedules in a burst.
-        if (current <= previous || current - previous > 20) return;
-        long dayIndex = Math.floorDiv(current, DAY_TICKS);
-        long target = dayIndex * DAY_TICKS + integrationTick;
-        if (previous < target && current >= target && dayIndex != lastScheduledDay) {
-            lastScheduledDay = dayIndex;
-            try {
-                memories.flush();
-                logMIP("Daily 00:00: "
-                    + MemoryIntegrationPatch.integrate(memories.directory()));
-            } catch (IOException ex) {
-                logMIP("Daily integration failed: " + ex.getMessage());
-            }
+        if (!scheduleInitialized) {
+            scheduleInitialized = true;
+            // Resume after midnight: catch up instead of waiting another day.
+            if (Math.floorMod(current, DAY_TICKS) >= 18000) integrateTrainingMidnight();
+            return;
         }
+        long previousDay = Math.floorDiv(previous, DAY_TICKS);
+        long currentDay = Math.floorDiv(current, DAY_TICKS);
+        boolean crossedMidnight = currentDay > previousDay
+            || (currentDay == previousDay && Math.floorMod(previous, DAY_TICKS) < 18000
+                && Math.floorMod(current, DAY_TICKS) >= 18000);
+        if (crossedMidnight || Math.floorMod(current, DAY_TICKS) >= 18000)
+            integrateTrainingMidnight();
     }
 
     private static int mipToggle(ServerCommandSource src, boolean enabled) {
