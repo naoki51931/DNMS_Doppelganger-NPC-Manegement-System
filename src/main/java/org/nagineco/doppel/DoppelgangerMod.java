@@ -5,6 +5,7 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.loader.api.FabricLoader;
 import org.nagineco.patch.memoryintegration.MemoryIntegrationPatch;
+import org.nagineco.patch.automovement.AutomaticMovementPatch;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
@@ -75,6 +76,8 @@ public class DoppelgangerMod implements ModInitializer {
     private static int selected = 0;
     private static boolean recording = false;
     private static boolean freePlay = false;
+    private static boolean playableAutoMove = false;
+    private static int lastAutoTick = -1;
 
 
     private static final Deque<String> reports = new ArrayDeque<>();
@@ -178,6 +181,11 @@ public class DoppelgangerMod implements ModInitializer {
                     .executes(c -> emotion(c.getSource(), StringArgumentType.getString(c, "value")))))
                 .then(literal("reason").then(argument("value", StringArgumentType.word())
                     .executes(c -> reason(c.getSource(), StringArgumentType.getString(c, "value")))))
+                .then(literal("automove")
+                    .then(literal("on").executes(c -> autoMove(c.getSource(), true)))
+                    .then(literal("off").executes(c -> autoMove(c.getSource(), false)))
+                    .then(literal("status").executes(c -> say(c.getSource(),
+                        "AMP " + (playableAutoMove ? "ON" : "OFF")))))
                 .then(literal("ai").then(literal("on").executes(c -> ai(c.getSource(), true)))
                     .then(literal("off").executes(c -> ai(c.getSource(), false))))
                 .then(literal("mip")
@@ -212,6 +220,7 @@ public class DoppelgangerMod implements ModInitializer {
             return say(src, "Could not initialize Markdown memories: " + e.getMessage());
         }
         aiMode = true;
+        playableAutoMove = false;
         owner = player.getUuid();
         world = player.getServerWorld();
         dawn = player.getBlockPos();
@@ -238,6 +247,14 @@ public class DoppelgangerMod implements ModInitializer {
         if (!recording || world == null || owner == null) return;
         ServerPlayerEntity player = server.getPlayerManager().getPlayer(owner);
         if (player == null || player.getServerWorld() != world) return;
+        if (playableAutoMove && memories != null && !brains.isEmpty()
+                && loopTick != lastAutoTick) {
+            lastAutoTick = loopTick;
+            int currentIndex = freePlay ? Math.min(selected, brains.size()-1) : tracks.size()-1;
+            HabitBrain.Move choice = AutomaticMovementPatch.choose(brains, currentIndex, loopTick, memories);
+            AutomaticMovementPatch.move(player, choice);
+            if (loopTick % 200 == 0) report("Playable Nao AMP selected " + choice);
+        }
         observePlayable(player);
         if (!freePlay) {
             List<Vec3d> current = tracks.get(tracks.size() - 1);
@@ -379,6 +396,7 @@ public class DoppelgangerMod implements ModInitializer {
         clearGhosts();
         recording = false;
         freePlay = false;
+        playableAutoMove = false;
         tracks.clear();
         brains.clear();
         memories = null;
@@ -543,6 +561,15 @@ public class DoppelgangerMod implements ModInitializer {
     private static boolean isOwner(ServerCommandSource src) {
         try { return owner != null && owner.equals(src.getPlayerOrThrow().getUuid()); }
         catch (Exception ex) { return false; }
+    }
+
+    private static int autoMove(ServerCommandSource src, boolean enabled) {
+        if (!recording || !isOwner(src)) return say(src, "Start DNMS as the playable Nao first.");
+        playableAutoMove = enabled;
+        lastAutoTick = -1;
+        report("Playable Nao automatic movement " + (enabled ? "enabled" : "disabled"));
+        return say(src, "AMP " + (enabled ? "ON" : "OFF")
+            + ": shared personality controls horizontal movement; use /doppel automove off to stop.");
     }
 
     private static int ai(ServerCommandSource src, boolean enabled) {
