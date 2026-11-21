@@ -23,7 +23,19 @@ public final class SharedOriginalMemory {
     private static Set<String> words(String value) {
         Set<String> result = new HashSet<>();
         Matcher m = WORD.matcher(value.toLowerCase(Locale.ROOT));
-        while (m.find()) result.add(m.group());
+        while (m.find()) {
+            String token = m.group();
+            result.add(token);
+            // Japanese word boundaries are not whitespace-delimited.
+            if (token.codePoints().anyMatch(c -> Character.UnicodeScript.of(c) == Character.UnicodeScript.HAN
+                    || Character.UnicodeScript.of(c) == Character.UnicodeScript.HIRAGANA
+                    || Character.UnicodeScript.of(c) == Character.UnicodeScript.KATAKANA)) {
+                int[] cp = token.codePoints().toArray();
+                for (int width = 2; width <= 3; width++)
+                    for (int i = 0; i + width <= cp.length; i++)
+                        result.add(new String(cp, i, width));
+            }
+        }
         return result;
     }
     private static String encode(String word) {
@@ -40,7 +52,7 @@ public final class SharedOriginalMemory {
         if (activeCount < 0 || activeCount > 256) throw new IOException("Invalid active Nao count");
         Files.createDirectories(dir);
         Properties index = new Properties();
-        index.setProperty("version", "2");
+        index.setProperty("version", "3");
         index.setProperty("active", Integer.toString(activeCount));
         Map<String, List<Hit>> inverted = new TreeMap<>();
         for (int slot = 1; slot <= activeCount; slot++) {
@@ -104,7 +116,7 @@ public final class SharedOriginalMemory {
         Map<Hit, Integer> scores = new HashMap<>();
         Path keywordFile = dir.resolve(KEYWORDS);
         // Index is only valid when both files are present and the version matches.
-        if ("2".equals(state.getProperty("version")) && Files.isRegularFile(keywordFile)) {
+        if ("3".equals(state.getProperty("version")) && Files.isRegularFile(keywordFile)) {
             try (BufferedReader reader = Files.newBufferedReader(keywordFile, StandardCharsets.UTF_8)) {
                 String line;
                 Set<String> wanted = new HashSet<>();
