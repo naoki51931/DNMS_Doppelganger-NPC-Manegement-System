@@ -541,6 +541,7 @@ public class DoppelgangerMod implements ModInitializer {
                     NaoLifeAI.plan(nao, sharedKnowledge, world, previous, time);
                 if (nao.goal == NaoLifeStore.Goal.COLLECT && loopTick % 100 == 0
                         && nao.energy >= 20 && NaoWorkPatch.harvest(world, previous, nao)) {
+                    if (rewardLearning) NaoRlpPatch.record(nao, NaoLifeStore.Goal.COLLECT, 5);
                     report("Nao " + nao.number + " " + nao.lastOutcome);
                     if (memories != null) memories.rememberEvent(i, day, loopTick,
                         "npc_collect", nao.lastOutcome);
@@ -554,6 +555,8 @@ public class DoppelgangerMod implements ModInitializer {
                 boolean moved = pos.squaredDistanceTo(previous) > 0.000001;
                 if (loopTick % 20 == 0) {
                     NaoLifeAI.update(nao, moved);
+                    if (rewardLearning && nao.goal == NaoLifeStore.Goal.EXPLORE)
+                        NaoRlpPatch.record(nao, NaoLifeStore.Goal.EXPLORE, moved ? 1 : -1);
                     if (moved && nao.goal == NaoLifeStore.Goal.EXPLORE)
                         life.learn(i, NaoLifeStore.Goal.EXPLORE);
                     nao.blockedSteps = !moved && move != HabitBrain.Move.STAY
@@ -583,6 +586,10 @@ public class DoppelgangerMod implements ModInitializer {
                     if (ghosts.get(senderIndex).getPos().squaredDistanceTo(
                             ghosts.get(receiverIndex).getPos()) > 16) continue;
                     if (NaoCooperationPatch.transfer(sender, receiver)) {
+                        if (rewardLearning) {
+                            NaoRlpPatch.record(sender, NaoLifeStore.Goal.SOCIAL, 3);
+                            NaoRlpPatch.record(receiver, NaoLifeStore.Goal.SOCIAL, 3);
+                        }
                         report("Nao cooperation: " + sender.lastOutcome);
                         if (memories != null) {
                             memories.rememberEvent(senderIndex, day, loopTick, "npc_transfer", sender.lastOutcome);
