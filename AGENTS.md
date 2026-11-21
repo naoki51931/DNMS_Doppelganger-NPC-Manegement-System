@@ -1,5 +1,18 @@
 # AGENTS.md — Doppel NPC Management System (DNMS)
 
+## Authoritative current implementation and limitations (2026-11-21)
+
+- **Configurable MIP:** `/doppel mip time HH:mm` accepts 00:00–23:59, persists `mip.time`, and uses the Minecraft clock (default 00:00 / tick 18000). Skipped crossings are caught up where possible, with a durable `mip-completed.txt` integration key to suppress repeats. `/doppel next` also attempts pending integration before advancing; the journal merge is not a fully transactional guarantee.
+- **Checkpoints:** Approximately every **100 server ticks** (5 seconds at 20 TPS), plus manual saves and clean shutdown. Positions and stable Nao UUIDs are persisted in `nao_lives.json`; new generations include `nao_social.json`. Recovery restores the last successful checkpoint, not necessarily the crash-instant position. Generation retention is currently unbounded.
+- **Auto-resume:** After restart, the saved owner automatically resumes on login in the saved dimension. **Owner-offline mode**: `/doppel offline on|off|status` persists an opt-in setting; with an already active/resumed session and `/doppel life on`, NPCs continue AI movement, limited gathering, cooperation and contextual dialogue while the owner is absent. Offline checkpoints use the last saved player state; **unattended cold-boot session restoration is not yet implemented**. Owner training and player movement do not continue while absent.
+- **NPCs:** Still armor-stand stand-ins, not authentic player entities. Life AI has individual lightweight inventory counts, limited exposed-log harvesting, cooperation, directed social relationships, autonomous two-way contextual Japanese dialogue and gradual reciprocal romance. Dialogue combines goal, local position, item-category counts, shared indexed experiences and relationship values; it is not LLM text generation. Rich compatibility, rejection, and individual agency in romance are **future development goals**, not current features.
+- **Shared memory:** MIP builds a common derived index from per-Nao journals and one shared personality; experimental life AI consults the index. Equal per-observation weights remain unchanged.
+- **World restore:** Default training transition resets Minecraft clock and playable Nao position, not world events. Optional `/doppel region on <radius>` supports a limited block-only region restore, not full world/entity/inventory rewind.
+- **Selection:** `/doppel select <slot>` moves the owner to the selected stand-in's current position in free-play (AI-driven or replay-driven). `/doppel control select <slot>` is limited avatar routing and pauses that stand-in; neither is full NPC possession.
+- **Implemented vs deferred:** Goal selection, limited collect/social actions, MIP reading, position persistence, auto-resume on owner login and limited control routing are implemented. Full humanoid NPCs, pathfinding, building protection, autonomous building, full-world rollback, multi-step planning, personality proposal approval and richer romantic autonomy remain future work.
+- **Verification:** GitHub Actions Fabric build passed according to the latest user confirmation. Minecraft runtime, crash-injection and unattended-mode tests remain outstanding. Historical milestone sections below are retained for context; any conflicting earlier claim is superseded by this section.
+
+
 ## Restart recovery, durable MIP ledger and contextual dialogue (2026-11-21)
 
 - **Auto-resume:** An active session writes `config/doppelganger/session-owner.txt` on checkpoint. After restart the server checks for the saved owner every 40 ticks and calls the existing resume flow when that player is online and in the recorded dimension. Explicit `/doppel stop` clears the marker. `SERVER_STOPPING` attempts a final checkpoint. This is **owner-login recovery**, not unattended NPC simulation while the owner is offline. A corrupt checkpoint, unavailable dimension or failed save can still prevent recovery.
@@ -13,7 +26,7 @@
 
 - **Autonomous social interaction:** When `/doppel life on` is enabled, nearby stand-ins (within six blocks) exchange context-selected Japanese dialogue lines every 400 loop ticks. Both directed familiarity values increase, individual SOCIAL skill and TALK evidence are recorded, and `npc_dialogue` events enter the per-Nao journals. Mutual familiarity/trust thresholds enable reciprocal romance opt-in and bounded `ROMANCE_REQUEST` affection growth, recorded as `npc_romance`. This is deterministic, template-based autonomous behavior, **not** open-ended language generation, sophisticated emotional simulation, or an interactive dialogue UI. Existing single shared personality remains unchanged.
 - **Daily memory integration:** MIP runs at Minecraft 00:00 (tick 18000). Missed clock crossings, resumes after midnight and manual `/doppel next` use a per-session-day catch-up attempt before the day is reset; failed integrations retry. `/doppel mip run` is still available. Experience weights remain unchanged. This is a best-effort retry mechanism, **not an absolute guarantee during server downtime or storage failures**.
-- **Position persistence:** Every session checkpoint now saves each live stand-in's last coordinates alongside its stable Nao UUID in `nao_lives.json`. On `/doppel resume`, stand-ins are reconstructed at saved positions; growing the population keeps existing live stand-ins intact. `/doppel stop` still discards the temporary Minecraft armor stands while preserving their logical identity and last checkpointed coordinates. A crash can lose changes since the most recent successful checkpoint; world chunk availability and spawn errors remain unverified. **Automatic session resume on server boot is not implemented**.
+- **Position persistence:** Every session checkpoint now saves each live stand-in's last coordinates alongside its stable Nao UUID in `nao_lives.json`. On `/doppel resume`, stand-ins are reconstructed at saved positions; growing the population keeps existing live stand-ins intact. `/doppel stop` still discards the temporary Minecraft armor stands while preserving their logical identity and last checkpointed coordinates. A crash can lose changes since the most recent successful checkpoint; world chunk availability and spawn errors remain unverified. **Owner-login auto-resume is implemented; unattended cold-boot restoration is not yet implemented**.
 - **Relationship checkpoint consistency:** New generations include `nao_social.json` and restore it on resume when present. Older generations without this file retain legacy behavior. Multi-file restore can still partially fail and is not transactional.
 - **Deferred by request:** building protection and target pathfinding remain future work.
 - **Verification:** The earlier GitHub Actions build #55 passed on commit `7c347de`. Changes listed in this section require their **own** CI and Minecraft runtime verification; do not treat #55 as verification of newer code.
@@ -59,12 +72,12 @@ brains.
 
 ## Daily MIP scheduling contract
 
-MIP default schedule is Minecraft **00:00** (tick **18000**), not tick 0.
-The operator can inspect or change it with `/doppel mip time [HH:mm]`.
+MIP defaults to Minecraft **00:00** (tick **18000**), but can be configured to any valid HH:mm.
+The operator can inspect or change it with `/doppel mip time [HH:mm]` (00:00–23:59).
 Persist the setting in `config/doppelganger/mip.time`. Scheduled integration
 requires MIP ON, an active Doppel session and initialized memory storage.
 Trigger on forward time crossings, at most once per underlying Minecraft day,
-and do not replay missed times after large clock jumps or repeated rewinds.
+and catch up missed scheduled crossings and avoid repeating an already completed integration key.
 Flush individual journals before integration. Manual `/doppel mip run` remains
 available. `/doppel next` and `/doppel stop` flush but do not merge on their
 own. Note that the prototype rewinds the Minecraft clock repeatedly and
@@ -78,7 +91,7 @@ The playable Nao is the primary demonstration source. During an active session, 
 - `/doppel npc report` — request each active stand-in NPC's position and movement sample count; results are also added to the report log.
 - `/doppel mip logs` — separate MIP integration diagnostics.
 
-Reports are delivered as operator command feedback and server console messages. They are **not yet unsolicited NPC messages**. The report ring buffer resets on server restart and on `/doppel start`; individual Markdown observations persist when flushed. Inventory and health sampling is best-effort: changes that cancel out between samples can be missed. NPCs still cannot mine, build, converse, or learn new gameplay actions from these journal event types. Integrated MIP's derived Markdown index is consulted by the experimental life AI when enabled, but not fed back into HabitBrain movement training.
+Reports are delivered as operator command feedback and server console messages. They are **not yet unsolicited NPC messages**. The report ring buffer resets on server restart and on `/doppel start`; individual Markdown observations persist when flushed. Inventory and health sampling is best-effort: changes that cancel out between samples can be missed. NPCs can perform limited exposed-log harvesting, contextual conversations and social interactions; full mining/building and general learning remain incomplete. Integrated MIP's derived Markdown index is consulted by the experimental life AI when enabled, but not fed back into HabitBrain movement training.
 
 ## Automatic Movement Patch (AMP)
 
@@ -88,11 +101,11 @@ The opt-in [Automatic Movement Patch](patches/automatic-movement/README.md) lets
 
 - **Self-training prevention:** While `/doppel automove on` is active, generated player movement is excluded from `HabitBrain.observe` and the structured movement journal, preventing an automatic movement feedback loop. Other directly observed events (inventory and health) remain available. Manual training resumes after `/doppel automove off`; the previous observation anchor is reset to the player's current position to prevent a false movement sample across the mode switch.
 - **Safer movement:** AMP now requires grounded movement, checks the destination player's collision box, verifies support underfoot, and rejects fluid destinations. These are conservative safeguards, **not full pathfinding or guaranteed fall protection**. Avoid testing near cliffs or hazardous terrain until verified.
-- Fabric 1.21.1 build and runtime have not yet been validated.
+- Fabric 1.21.1 CI build has passed; runtime testing remains pending.
 
 ## JSON recording persistence
 
-The Fabric mod flushes all pending individual Markdown journals **before** writing the JSON snapshot at each save checkpoint. The JSON file stores all recorded Nao movement tracks, current day, selected Nao and free-play state to `config/doppelganger/recordings.json`. The file is written through a temporary file followed by a replacement move to reduce partial writes. `/doppel stop` saves before clearing in-memory data and refuses to stop if the save fails. `/doppel save` forces a checkpoint; `/doppel resume` reloads saved tracks and restores each Nao's learned model from its existing Markdown journal. `/doppel start` begins a **new** session and may replace the previous snapshot at the next save; use `resume` to continue an existing session. Snapshots also occur every 1200 ticks during active sessions and on `/doppel next`.
+The Fabric mod flushes all pending individual Markdown journals **before** writing the JSON snapshot at each save checkpoint. The JSON file stores all recorded Nao movement tracks, current day, selected Nao and free-play state to `config/doppelganger/recordings.json`. The file is written through a temporary file followed by a replacement move to reduce partial writes. `/doppel stop` saves before clearing in-memory data and refuses to stop if the save fails. `/doppel save` forces a checkpoint; `/doppel resume` reloads saved tracks and restores each Nao's learned model from its existing Markdown journal. `/doppel start` begins a **new** session and may replace the previous snapshot at the next save; use `resume` to continue an existing session. Snapshots also occur every 100 server ticks during active sessions and on `/doppel next`.
 
 The legacy recordings JSON does not include world blocks or NPC entities. Generation checkpoints additionally contain a player inventory snapshot and Nao identity data, but still do not rewind the world. After resume, ghost stand-ins are recreated from tracks, automatic movement defaults OFF, and movement habits are restored from Markdown (not from a serialized in-memory brain). Crash recovery is limited to the last successful checkpoint. Build and Minecraft runtime are still unverified.
 
@@ -106,7 +119,7 @@ The legacy recordings JSON does not include world blocks or NPC entities. Genera
 
 ## Checkpoint and recovery corrections
 
-- Periodic JSON checkpoints are paced by **server ticks** (at most once per 1200 ticks), not by the training loop counter, which can pause at 24000 and previously cause repeated writes.
+- Periodic JSON checkpoints are paced by **server ticks** (at most once per 100 ticks), not by the training loop counter, which can pause at 24000 and previously cause repeated writes.
 - On `/doppel resume` during training, the player is teleported to the last recorded position of the active Nao and the movement observation anchor is reset there. For generation snapshots with `player.json`, player inventory and other selected state are restored; the Minecraft world is not rolled back. The saved track may have ended before the latest Markdown event flush in a crash.
 - In free-play mode, `/doppel next` checkpoints the current day **before** advancing the day counter; a failed save no longer advances the day.
 - Signed item/damage events are annotations by default; with `/doppel reward on`, their associated reward entries influence movement decisions. MIP's clock schedule still operates on Minecraft time, not a guaranteed once-per-training-loop merge. The shared playable/NPC Nao personality remains a single profile.
@@ -123,7 +136,7 @@ Commands (operator, playable owner): `/doppel reward on`, `/doppel reward off`, 
 - **Player state:** checkpoint includes the playable Nao's dimension identifier, exact position/rotation, health, XP level/total/progress, and full inventory ItemStack NBT (item IDs/counts plus components). On `/doppel resume` these values replace the current player state. **Important limitation:** item stacks are serialized as complete registry-aware Minecraft NBT in v2 checkpoints, including enchantments, custom names, durability and other supported data components. Older v1 checkpoints only contain item IDs and counts, so their missing metadata cannot be reconstructed. Resume requires the player to already be in the saved dimension. Back up the world and inventory before testing. World blocks, entities, hunger, effects, and other player state are not restored.
 - **MIP remains Minecraft-time based:** the scheduled clock crossing (default midnight/tick 18000) is unchanged; it does not necessarily merge after each Nao loop.
 - **Equal experiences:** all 24 Nao journals have weight 1.0 in the shared movement decision; there is no special 2x boost for the current Nao. One authoritative `nao_personality.md` remains shared by playable Nao and all 24 NPCs.
-- Build and runtime testing are still pending; do not treat the player-state serializer as a complete lossless Minecraft backup.
+- Minecraft runtime testing is still pending; do not treat the player-state serializer as a complete lossless Minecraft backup.
 
 ### Full item-stack metadata preservation
 
@@ -160,7 +173,7 @@ Implementation order and status:
 6. **Individual skill learning — partial.** Exploration can increment from observed stand-in movement; collecting/building/social skills are represented but deliberately **not** increased merely for choosing a goal. Actual activity sensors, world interactions and skill training are future work.
 7. **Permanent individual IDs — implemented at application data level.** `config/doppelganger/nao_lives.json` stores UUIDs, goals, energy and skill counters. It is included in generation checkpoints. The armor stand entity UUID itself is not persisted and stand-ins are still recreated; stable NPC entity identity requires a future entity implementation.
 
-**Known limitations / deferred work:** NPCs remain armor stands, not full player-like autonomous entities; no real block-breaking, block placement, pathfinding, inventories or social actions. NPC world positions are not durably saved independently. Goals currently share a simple movement policy, and a shared MIP index is a derived knowledge summary, not a complete synchronized subjective memory. The existing checkpoint/resume atomicity defects and player-state restoration risks documented above remain unresolved. Do not claim the mod is tested or production-ready. Preserve all 24 Nao experience weights equally and do not create per-Nao personality files.
+**Known limitations / deferred work:** NPCs remain armor stands, not full player-like autonomous entities; limited exposed-log harvesting and per-Nao inventory/social data, but no full block placement or pathfinding. NPC position is checkpointed per identity and restored on resume. Goals currently share a simple movement policy, and a shared MIP index is a derived knowledge summary, not a complete synchronized subjective memory. The existing checkpoint/resume atomicity defects and player-state restoration risks documented above remain unresolved. Do not claim the mod is tested or production-ready. Preserve all 24 Nao experience weights equally and do not create per-Nao personality files.
 
 
 ## Documentation consistency audit (2026-11-21)
@@ -172,12 +185,12 @@ Implementation order and status:
 - Older passages saying `/doppel resume` never restores inventory or always teleports to the last recorded track are obsolete for a generation with `player.json`: the restore code attempts player position, health, XP and inventory restoration. A legacy recording without a player snapshot follows the old track-position behavior. Neither path rewinds the world.
 - The generation manifest description predating life AI omitted `nao_lives.json`. New checkpoints include it, and resume copies it when present. Older generations can lack this optional file.
 - The statement that all 24 experiences have identical weights means **each recorded sample has multiplier 1.0**, not that each individual has equal *total* influence irrespective of how many samples they contributed. More prolific journals currently influence the shared movement decision more. If equal influence per Nao is intended, normalize by the number of samples per individual.
-- `NaoLifeAI` has goal labels for COLLECT/BUILD/SOCIAL but **no corresponding world actions**. The current skill increment is limited to exploration movement; do not describe it as full skill learning.
+- `NaoLifeAI` has goal labels for COLLECT/BUILD/SOCIAL but **limited COLLECT and SOCIAL world actions, but no complete BUILD world action**. The current skill increment is limited to exploration movement; do not describe it as full skill learning.
 - **Unresolved code/design risk:** `DoppelgangerMod.resume()` assigns global `memories` and copies live `nao_lives.json` before player restoration and full session activation. Failure can leave partial live/global state. The identity file is also independent of the checkpoint until publish; interrupted saves/resumes need transactional recovery.
 - **Unresolved code/design risk:** a newly started session reuses the existing `nao_lives.json` identities rather than resetting them; define whether `/doppel start` means a fresh cohort or a continuation before changing this behavior.
 - **Unresolved behavior:** life AI updates its energy and exploration skill based on the chosen movement before collision/boundary checks; blocked movement can still count as exploration. Update only after successful displacement.
 - **Unresolved behavior:** the life AI layer is opt-in but its goal/skill decisions are heuristic, not an LLM or a fully autonomous survival agent. The stable UUID belongs to saved Nao application data, not to a persistent Minecraft entity.
-- **Unresolved build/runtime:** no Java 21/Fabric 1.21.1 compilation or in-game test has been completed for these changes. Do not represent implementation as verified.
+- **Unresolved build/runtime:** Java 21/Fabric CI compilation has passed; in-game testing is outstanding for these changes. Do not represent implementation as verified.
 
 **Future maintenance:** consolidate superseded sections rather than leaving conflicting historical statements; verify `/doppel start`, `next`, `resume`, `stop`, MIP and both opt-in toggles against actual code, then build and test on a disposable world. Keep one shared `nao_personality.md` and independent `nao_01.md`–`nao_24.md` journals.
 
@@ -279,6 +292,6 @@ Historical note: these changes were unverified when this section was written; co
 
 ### Midnight MIP and persistent Nao stand-ins (2026-11-21)
 
-- **MIP shared-memory integration is fixed to Minecraft 00:00 (tick 18000)**. Older custom `mip.time` values are ignored. `/doppel mip time` accepts only `00:00`. Natural midnight crossing invokes the existing memory integration. Manual `/doppel mip run` and enabling MIP can still trigger an immediate integration; these are explicit/manual exceptions. This does **not** change per-record weights: all experiences retain weight 1.0, so prolific Naos can still contribute more records. A time skip over midnight may skip integration, as before.
+- **MIP defaults to Minecraft 00:00 (tick 18000), with configurable HH:mm**. Valid custom `mip.time` values are loaded. `/doppel mip time HH:mm` accepts valid 24-hour Minecraft times. Natural midnight crossing invokes the existing memory integration. Manual `/doppel mip run` and enabling MIP can still trigger an immediate integration; these are explicit/manual exceptions. This does **not** change per-record weights: all experiences retain weight 1.0, so prolific Naos can still contribute more records. A time skip over midnight may skip integration, as before.
 - **Nao continuity during growth:** `spawnGhosts()` no longer destroys and recreates every existing stand-in when another Nao is added. Living stands retain their entity and current position; missing/removed stands are recreated for the same slot using their last available position. The logical Nao UUID and saved journals are unchanged. Explicit `/doppel stop` still removes the temporary stand-ins and `/doppel resume` recreates them from saved tracks; **permanent entity persistence, independent position checkpoints, and protection from every kind of disappearance are not yet implemented**.
-- Build and in-game verification remain pending.
+- In-game verification remains pending.
