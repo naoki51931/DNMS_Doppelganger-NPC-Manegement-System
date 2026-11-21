@@ -4,6 +4,13 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.loader.api.FabricLoader;
+import org.nagineco.patch.memoryintegration.MemoryIntegrationPatch;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.logging.Logger;
 import java.io.IOException;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
@@ -38,6 +45,18 @@ public class DoppelgangerMod implements ModInitializer {
     private static final List<HabitBrain> brains = new ArrayList<>();
     private static boolean aiMode = true;
     private static PersonalityMemoryStore memories;
+    private static final Logger LOG = Logger.getLogger("Doppelganger.MIP");
+    private static final Deque<String> mipLog = new ArrayDeque<>();
+    private static boolean mipEnabled = true;
+    private static Path mipSettingFile() {
+        return FabricLoader.getInstance().getConfigDir().resolve("doppelganger/mip.enabled");
+    }
+    private static void logMIP(String message) {
+        String entry = "[MIP] " + message;
+        LOG.info(entry);
+        if (mipLog.size() >= 20) mipLog.removeFirst();
+        mipLog.addLast(entry);
+    }
     private static UUID owner;
     private static ServerWorld world;
     private static BlockPos dawn;
@@ -48,6 +67,14 @@ public class DoppelgangerMod implements ModInitializer {
     private static boolean freePlay = false;
 
     @Override public void onInitialize() {
+        try {
+            Path setting = mipSettingFile();
+            if (Files.exists(setting))
+                mipEnabled = !Files.readString(setting, StandardCharsets.UTF_8).trim().equalsIgnoreCase("off");
+        } catch (IOException ex) {
+            logMIP("Could not load enabled setting; using default ON: " + ex.getMessage());
+        }
+        logMIP("Initialized; enabled=" + mipEnabled + ". Use /doppel mip status|on|off|run|logs.");
         CommandRegistrationCallback.EVENT.register((dispatcher, registry, environment) ->
             dispatcher.register(literal("doppel")
                 .requires(s -> s.hasPermissionLevel(2))
@@ -67,6 +94,12 @@ public class DoppelgangerMod implements ModInitializer {
                     .executes(c -> reason(c.getSource(), StringArgumentType.getString(c, "value")))))
                 .then(literal("ai").then(literal("on").executes(c -> ai(c.getSource(), true)))
                     .then(literal("off").executes(c -> ai(c.getSource(), false))))
+                .then(literal("mip")
+                    .then(literal("status").executes(c -> mipStatus(c.getSource())))
+                    .then(literal("on").executes(c -> mipToggle(c.getSource(), true)))
+                    .then(literal("off").executes(c -> mipToggle(c.getSource(), false)))
+                    .then(literal("run").executes(c -> mipRun(c.getSource())))
+                    .then(literal("logs").executes(c -> mipLogs(c.getSource()))))
                 .then(literal("stop").executes(c -> stop(c.getSource())))
             )
         );
@@ -88,6 +121,10 @@ public class DoppelgangerMod implements ModInitializer {
             return say(src, "Could not initialize Markdown memories: " + e.getMessage());
         }
         aiMode = true;
+        if (mipEnabled) {
+            try { logMIP(MemoryIntegrationPatch.integrate(memories.directory())); }
+            catch (IOException ex) { logMIP("Initial integration failed: " + ex.getMessage()); }
+        }
         owner = player.getUuid();
         world = player.getServerWorld();
         dawn = player.getBlockPos();
@@ -157,8 +194,13 @@ public class DoppelgangerMod implements ModInitializer {
 
     private static int next(ServerCommandSource src) {
         if (memories != null) {
-            try { memories.flush(); }
-            catch (IOException e) { return say(src, "Failed to save memories: " + e.getMessage()); }
+            try {
+                memories.flush();
+                if (mipEnabled) logMIP(MemoryIntegrationPatch.integrate(memories.directory()));
+            } catch (IOException e) {
+                logMIP("Memory flush/integration failed: " + e.getMessage());
+                return say(src, "Failed to save/integrate memories: " + e.getMessage());
+            }
         }
         if (!recording) return say(src, "Start with /doppel start.");
         if (freePlay) {
@@ -234,8 +276,13 @@ public class DoppelgangerMod implements ModInitializer {
 
     private static int stop(ServerCommandSource src) {
         if (memories != null) {
-            try { memories.flush(); }
-            catch (IOException e) { return say(src, "Could not save memories: " + e.getMessage()); }
+            try {
+                memories.flush();
+                if (mipEnabled) logMIP(MemoryIntegrationPatch.integrate(memories.directory()));
+            } catch (IOException e) {
+                logMIP("Memory flush/integration failed: " + e.getMessage());
+                return say(src, "Could not save/integrate memories: " + e.getMessage());
+            }
         }
         clearGhosts();
         recording = false;
@@ -247,6 +294,54 @@ public class DoppelgangerMod implements ModInitializer {
         world = null;
         dawn = null;
         return say(src, "Stopped. Unsaved recordings discarded.");
+    }
+
+    private static int mipStatus(ServerCommandSource src) {
+        return say(src, "MIP " + (mipEnabled ? "ON" : "OFF")
+            + " | recent log entries: " + mipLog.size()
+            + " | integrated index: " + (memories != null
+                && Files.exists(memories.directory().resolve("nao_integrated_memory.md"))));
+    }
+
+    private static int mipToggle(ServerCommandSource src, boolean enabled) {
+        try {
+            Path file = mipSettingFile();
+            Files.createDirectories(file.getParent());
+            Files.writeString(file, enabled ? "on\\n" : "off\\n", StandardCharsets.UTF_8);
+            mipEnabled = enabled;
+            logMIP("Switched " + (enabled ? "ON" : "OFF") + " by command");
+            if (enabled && memories != null) {
+                memories.flush();
+                logMIP(MemoryIntegrationPatch.integrate(memories.directory()));
+            }
+            return say(src, "MIP " + (enabled ? "ON" : "OFF") + " (setting saved).");
+        } catch (IOException e) {
+            logMIP("Toggle failed: " + e.getMessage());
+            return say(src, "MIP toggle failed: " + e.getMessage());
+        }
+    }
+
+    private static int mipRun(ServerCommandSource src) {
+        if (!mipEnabled) return say(src, "MIP is OFF; use /doppel mip on first.");
+        try {
+            if (memories == null)
+                memories = new PersonalityMemoryStore(
+                    FabricLoader.getInstance().getGameDir().resolve("config/doppelganger/memories"));
+            memories.flush();
+            String result = MemoryIntegrationPatch.integrate(memories.directory());
+            logMIP(result);
+            return say(src, result);
+        } catch (IOException e) {
+            logMIP("Manual integration failed: " + e.getMessage());
+            return say(src, "MIP failed: " + e.getMessage());
+        }
+    }
+
+    private static int mipLogs(ServerCommandSource src) {
+        if (mipLog.isEmpty()) return say(src, "No MIP logs yet.");
+        for (String entry : mipLog)
+            src.sendFeedback(() -> Text.literal(entry), false);
+        return 1;
     }
 
     private static int preference(ServerCommandSource src, String reasonName, int strength) {
