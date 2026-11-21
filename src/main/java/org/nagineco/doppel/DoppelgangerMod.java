@@ -7,6 +7,7 @@ import net.fabricmc.loader.api.FabricLoader;
 import org.nagineco.patch.memoryintegration.MemoryIntegrationPatch;
 import org.nagineco.patch.automovement.AutomaticMovementPatch;
 import org.nagineco.patch.rewardlearning.RewardLearningPatch;
+import org.nagineco.patch.naogrowth.NaoGrowthPatch;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
@@ -98,6 +99,42 @@ public class DoppelgangerMod implements ModInitializer {
     private static UUID owner;
     private static ServerWorld world;
     private static BlockPos dawn;
+    private static int growthTick = 0; // default 06:00: training day start
+    private static long growthObserved = Long.MIN_VALUE;
+    private static long growthDay = Long.MIN_VALUE;
+    private static Path growthFile() {
+        return FabricLoader.getInstance().getConfigDir().resolve("doppelganger/growth.time");
+    }
+    private static int growthStatus(ServerCommandSource src) {
+        return say(src, "Nao growth: +1 per day at " + NaoGrowthPatch.formatClock(growthTick)
+            + " (Minecraft time), maximum 24; training only.");
+    }
+    private static int growthTime(ServerCommandSource src, String clock) {
+        if (!isOwner(src)) return say(src, "Only playable Nao may set growth time.");
+        int tick;
+        try { tick = NaoGrowthPatch.parseClock(clock); }
+        catch (IllegalArgumentException ex) { return say(src, ex.getMessage()); }
+        try {
+            Files.createDirectories(growthFile().getParent());
+            Files.writeString(growthFile(), clock, StandardCharsets.UTF_8);
+        } catch (IOException ex) { return say(src, "Growth schedule save failed: " + ex.getMessage()); }
+        growthTick = tick;
+        growthObserved = Long.MIN_VALUE;
+        return say(src, "Nao growth scheduled daily at " + clock + "; +1, up to 24.");
+    }
+    private static void tickGrowth(MinecraftServer server) {
+        if (!recording || freePlay || world == null || owner == null || tracks.size() >= CHARACTERS) return;
+        long now = world.getTimeOfDay();
+        long previous = growthObserved;
+        growthObserved = now;
+        long dayIndex = Math.floorDiv(now, DAY_TICKS);
+        if (!NaoGrowthPatch.crossed(previous, now, growthTick) || dayIndex == growthDay) return;
+        ServerPlayerEntity player = server.getPlayerManager().getPlayer(owner);
+        if (player == null || player.getServerWorld() != world) return;
+        growthDay = dayIndex;
+        // Reuse the established one-at-a-time transition and its checkpoint.
+        next(player.getCommandSource());
+    }
     private static int loopTick = 0;
     private static int day = 1;
     private static int selected = 0;
@@ -324,6 +361,8 @@ public class DoppelgangerMod implements ModInitializer {
     }
 
     @Override public void onInitialize() {
+        try { if (Files.exists(growthFile())) growthTick = NaoGrowthPatch.parseClock(Files.readString(growthFile(), StandardCharsets.UTF_8).trim()); }
+        catch (IOException | IllegalArgumentException ex) { growthTick = 0; LOG.warning("Growth time reset to 06:00: " + ex.getMessage()); }
         try {
             Path file = rewardSettingFile();
             rewardLearning = Files.exists(file) && Files.readString(file, StandardCharsets.UTF_8).trim().equalsIgnoreCase("on");
@@ -350,6 +389,10 @@ public class DoppelgangerMod implements ModInitializer {
             dispatcher.register(literal("doppel")
                 .requires(s -> s.hasPermissionLevel(2))
                 .then(literal("start").executes(c -> start(c.getSource())))
+                .then(literal("growth")
+                    .then(literal("status").executes(c -> growthStatus(c.getSource())))
+                    .then(literal("time").then(argument("clock", StringArgumentType.word())
+                        .executes(c -> growthTime(c.getSource(), StringArgumentType.getString(c, "clock"))))))
                 .then(literal("save").executes(c -> saveCommand(c.getSource())))
                 .then(literal("life")
                     .then(literal("on").executes(c -> lifeToggle(c.getSource(), true)))
@@ -436,11 +479,14 @@ public class DoppelgangerMod implements ModInitializer {
         report("Playable Nao training started; automatic observation enabled.");
         scheduleInitialized = false;
         lastScheduledDay = Long.MIN_VALUE;
+        growthObserved = Long.MIN_VALUE;
+        growthDay = Long.MIN_VALUE;
         return say(src, "Day 1, loop 1/24. Play, then /doppel next.");
     }
 
     private static void tick(MinecraftServer server) {
         tickMIP(server);
+        tickGrowth(server);
         if (!recording || world == null || owner == null) return;
         ServerPlayerEntity player = server.getPlayerManager().getPlayer(owner);
         if (player == null || player.getServerWorld() != world) return;
