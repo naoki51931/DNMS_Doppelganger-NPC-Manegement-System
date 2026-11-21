@@ -136,44 +136,35 @@ public final class PersonalityMemoryStore {
         }
     }
 
-    /** Copy every source episode into every other Nao journal, retaining source provenance. */
+    /** Publish shared access to originals, without copying 256 journals into each other.
+     * Legacy copied blocks are removed after publishing the index; original events remain.
+     */
     public void replicateAll(int activeCount) throws IOException {
         flush();
         int count = Math.min(256, Math.max(0, activeCount));
-        List<String> originals = new ArrayList<>();
+        // First remove legacy duplicate blocks, retaining every original episode.
         for (int i = 0; i < count; i++) {
-            StringBuilder own = new StringBuilder();
-            boolean inShared = false;
-            for (String line : Files.readAllLines(memoryPath(i), StandardCharsets.UTF_8)) {
-                if (line.equals("<!-- DNMS_SHARED_COPY_BEGIN -->")) { inShared = true; continue; }
-                if (line.equals("<!-- DNMS_SHARED_COPY_END -->")) { inShared = false; continue; }
-                if (!inShared) own.append(line).append("\n");
+            Path file = memoryPath(i);
+            List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
+            if (!lines.contains("<!-- DNMS_SHARED_COPY_BEGIN -->")) continue;
+            List<String> original = new ArrayList<>();
+            boolean copied = false;
+            for (String line : lines) {
+                if (line.equals("<!-- DNMS_SHARED_COPY_BEGIN -->")) { copied = true; continue; }
+                if (line.equals("<!-- DNMS_SHARED_COPY_END -->")) { copied = false; continue; }
+                if (!copied) original.add(line);
             }
-            originals.add(own.toString());
-        }
-        for (int i = 0; i < count; i++) {
-            StringBuilder copy = new StringBuilder(originals.get(i));
-            copy.append("\n<!-- DNMS_SHARED_COPY_BEGIN -->\n## Shared full-memory copies\n");
-            for (int j = 0; j < count; j++) {
-                if (i == j) continue;
-                copy.append("### Source Nao ").append(j + 1).append("\n");
-                for (String line : originals.get(j).split("\n"))
-                    if (line.startsWith("- day="))
-                        copy.append("- shared_from_nao=").append(j + 1)
-                            .append(" ").append(line.substring(2)).append("\n");
-            }
-            copy.append("<!-- DNMS_SHARED_COPY_END -->\n");
-            Path target = memoryPath(i);
-            Path tmp = target.resolveSibling(target.getFileName() + ".replica.tmp");
+            Path tmp = file.resolveSibling(file.getFileName() + ".original.tmp");
             try {
-                Files.writeString(tmp, copy.toString(), StandardCharsets.UTF_8);
-                try { Files.move(tmp, target, java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                Files.write(tmp, original, StandardCharsets.UTF_8);
+                try { Files.move(tmp, file, java.nio.file.StandardCopyOption.ATOMIC_MOVE,
                     java.nio.file.StandardCopyOption.REPLACE_EXISTING); }
                 catch (java.nio.file.AtomicMoveNotSupportedException ex) {
-                    Files.move(tmp, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                    Files.move(tmp, file, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
                 }
             } finally { Files.deleteIfExists(tmp); }
         }
+        SharedOriginalMemory.publish(directory, count);
     }
 
     public void flush() throws IOException {
