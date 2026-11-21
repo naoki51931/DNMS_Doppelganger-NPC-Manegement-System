@@ -27,12 +27,8 @@ jobs:
           gradle --version
       - name: Compile and build Fabric mod
         run: |
-          if [ -f ./gradlew ]; then
-            chmod +x ./gradlew
-            ./gradlew --no-daemon clean build
-          else
-            gradle --no-daemon clean build
-          fi
+          # Always use the pinned Gradle from setup-gradle; a wrapper may select another version.
+          gradle --no-daemon --stacktrace clean build
       - name: Upload test reports on failure
         if: failure()
         uses: actions/upload-artifact@v4
