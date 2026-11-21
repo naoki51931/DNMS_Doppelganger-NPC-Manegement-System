@@ -50,7 +50,7 @@ public final class NaoLifeStore {
         if (!Files.exists(file)) return;
         try (Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
             Nao[] data = GSON.fromJson(reader, Nao[].class);
-            if (data == null || data.length > 24) throw new IOException("Invalid Nao identity list");
+            if (data == null || data.length > 256) throw new IOException("Invalid Nao identity list");
             Set<String> ids = new HashSet<>();
             for (Nao n : data) {
                 if (n == null || n.id == null || n.goal == null || n.number != members.size()+1
@@ -75,7 +75,7 @@ public final class NaoLifeStore {
         } catch (RuntimeException ex) { throw new IOException("Malformed Nao identities", ex); }
     }
     public Nao ensure(int index) {
-        if (index < 0 || index >= 24) throw new IllegalArgumentException("Nao index");
+        if (index < 0 || index >= 256) throw new IllegalArgumentException("Nao index");
         while (members.size() <= index) {
             Nao n = new Nao();
             n.number = members.size() + 1;
