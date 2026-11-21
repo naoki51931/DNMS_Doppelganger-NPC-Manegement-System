@@ -3,6 +3,8 @@ package org.nagineco.doppel;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import net.fabricmc.api.ModInitializer;
+import net.fabricmc.loader.api.FabricLoader;
+import java.io.IOException;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.entity.EntityType;
@@ -35,6 +37,7 @@ public class DoppelgangerMod implements ModInitializer {
     private static final List<ArmorStandEntity> ghosts = new ArrayList<>();
     private static final List<HabitBrain> brains = new ArrayList<>();
     private static boolean aiMode = true;
+    private static PersonalityMemoryStore memories;
     private static UUID owner;
     private static ServerWorld world;
     private static BlockPos dawn;
@@ -53,6 +56,11 @@ public class DoppelgangerMod implements ModInitializer {
                 .then(literal("status").executes(c -> status(c.getSource())))
                 .then(literal("select").then(argument("id", IntegerArgumentType.integer(1, 24))
                     .executes(c -> select(c.getSource(), IntegerArgumentType.getInteger(c, "id")))))
+                .then(literal("preference").then(argument("reason", StringArgumentType.word())
+                    .then(argument("strength", IntegerArgumentType.integer(0, 10))
+                    .executes(c -> preference(c.getSource(),
+                        StringArgumentType.getString(c, "reason"),
+                        IntegerArgumentType.getInteger(c, "strength"))))))
                 .then(literal("emotion").then(argument("value", StringArgumentType.word())
                     .executes(c -> emotion(c.getSource(), StringArgumentType.getString(c, "value")))))
                 .then(literal("reason").then(argument("value", StringArgumentType.word())
@@ -73,6 +81,12 @@ public class DoppelgangerMod implements ModInitializer {
         clearGhosts();
         tracks.clear();
         brains.clear();
+        try {
+            memories = new PersonalityMemoryStore(
+                FabricLoader.getInstance().getGameDir().resolve("config/doppelganger/memories"));
+        } catch (IOException e) {
+            return say(src, "Could not initialize Markdown memories: " + e.getMessage());
+        }
         aiMode = true;
         owner = player.getUuid();
         world = player.getServerWorld();
@@ -83,7 +97,10 @@ public class DoppelgangerMod implements ModInitializer {
         freePlay = false;
         recording = true;
         tracks.add(new ArrayList<>());
-        brains.add(new HabitBrain());
+        HabitBrain first = new HabitBrain();
+        try { memories.restore(0, first); }
+        catch (IOException e) { return say(src, "Could not read Nao 01 memory: " + e.getMessage()); }
+        brains.add(first);
         world.setTimeOfDay(0);
         return say(src, "Day 1, loop 1/24. Play, then /doppel next.");
     }
@@ -96,7 +113,14 @@ public class DoppelgangerMod implements ModInitializer {
             List<Vec3d> current = tracks.get(tracks.size() - 1);
             if (current.size() < DAY_TICKS) {
                 current.add(player.getPos());
-                brains.get(tracks.size() - 1).observe(player.getPos());
+                HabitBrain brain = brains.get(tracks.size() - 1);
+                brain.observe(player.getPos());
+                if (memories != null && current.size() % 20 == 0) {
+                    Vec3d p = player.getPos();
+                    memories.remember(tracks.size() - 1, day, current.size() - 1,
+                        new PersonalityMemoryStore.VecRecord(p.x, p.y, p.z,
+                            brain.latestMove().name(), brain.emotion(), brain.reason()));
+                }
             }
             if (current.size() >= DAY_TICKS) {
                 // Pause at end of recorded day until the operator advances.
@@ -112,7 +136,9 @@ public class DoppelgangerMod implements ModInitializer {
             if (!samples.isEmpty()) {
                 Vec3d pos;
                 if (aiMode) {
-                    pos = brains.get(i).step(ghost.getPos(), loopTick);
+                    pos = memories == null ? brains.get(i).step(ghost.getPos(), loopTick)
+                        : HabitBrain.applyMove(ghost.getPos(),
+                            HabitBrain.sharedDecision(brains, i, loopTick, memories));
                     // Bound AI to a local demonstration area and avoid solid blocks.
                     Vec3d origin = samples.get(0);
                     if (pos.squaredDistanceTo(origin) > 32 * 32
@@ -130,6 +156,10 @@ public class DoppelgangerMod implements ModInitializer {
     }
 
     private static int next(ServerCommandSource src) {
+        if (memories != null) {
+            try { memories.flush(); }
+            catch (IOException e) { return say(src, "Failed to save memories: " + e.getMessage()); }
+        }
         if (!recording) return say(src, "Start with /doppel start.");
         if (freePlay) {
             day++;
@@ -151,7 +181,13 @@ public class DoppelgangerMod implements ModInitializer {
             return say(src, "24 recordings completed. Use /doppel select 1..24.");
         }
         tracks.add(new ArrayList<>());
-        brains.add(new HabitBrain());
+        HabitBrain newBrain = new HabitBrain();
+        try { memories.restore(tracks.size() - 1, newBrain); }
+        catch (IOException e) {
+            tracks.remove(tracks.size() - 1);
+            return say(src, "Failed to load next Nao memory: " + e.getMessage());
+        }
+        brains.add(newBrain);
         spawnGhosts();
         return say(src, "Day " + day + " loop " + (finished+1) + "/24.");
     }
@@ -197,15 +233,35 @@ public class DoppelgangerMod implements ModInitializer {
     }
 
     private static int stop(ServerCommandSource src) {
+        if (memories != null) {
+            try { memories.flush(); }
+            catch (IOException e) { return say(src, "Could not save memories: " + e.getMessage()); }
+        }
         clearGhosts();
         recording = false;
         freePlay = false;
         tracks.clear();
         brains.clear();
+        memories = null;
         owner = null;
         world = null;
         dawn = null;
         return say(src, "Stopped. Unsaved recordings discarded.");
+    }
+
+    private static int preference(ServerCommandSource src, String reasonName, int strength) {
+        if (!recording || memories == null) return say(src, "Start training first.");
+        if (!isOwner(src)) return say(src, "Only the playable character's player can set personality.");
+        try {
+            HabitBrain.Reason reason = HabitBrain.Reason.valueOf(
+                reasonName.toUpperCase(java.util.Locale.ROOT));
+            memories.setPreference(reason, strength);
+            return say(src, "Shared Nao personality: " + reason + "=" + strength + "/10");
+        } catch (IllegalArgumentException ex) {
+            return say(src, "Reasons: none, explore, build, collect, safety, social.");
+        } catch (IOException ex) {
+            return say(src, "Could not save personality: " + ex.getMessage());
+        }
     }
 
     private static int emotion(ServerCommandSource src, String value) {
