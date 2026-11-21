@@ -16,7 +16,7 @@ import net.minecraft.util.math.Vec3d;
 /** Durable, bounded JSON snapshot of the 24 playable training tracks. */
 public final class RecordingSnapshotStore {
     private static final Gson GSON = new Gson();
-    private static final int MAX_TRACKS = 24;
+    private static final int MAX_TRACKS = 256;
     private static final int MAX_SAMPLES = 24000;
     private RecordingSnapshotStore() {}
 
@@ -72,7 +72,7 @@ public final class RecordingSnapshotStore {
                         throw new IOException("Invalid coordinates");
                 }
             }
-            if (data.freePlay && data.tracks.size() != MAX_TRACKS)
+            if (data.freePlay && data.tracks.size() < 24)
                 throw new IOException("Incomplete free-play snapshot");
             return data;
         } catch (JsonParseException | IllegalStateException ex) {
