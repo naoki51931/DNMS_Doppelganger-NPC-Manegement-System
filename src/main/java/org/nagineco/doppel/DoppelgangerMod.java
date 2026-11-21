@@ -692,6 +692,12 @@ public class DoppelgangerMod implements ModInitializer {
             if (loopTick % 200 == 0) report("Playable Nao AMP selected " + choice);
         }
         observePlayable(player);
+        if (freePlay && controlSession.selection().mode() == NaoControlSession.Mode.NPC) {
+            int controlled = controlSession.selection().slot() - 1;
+            if (controlled < ghosts.size() && !ghosts.get(controlled).isRemoved())
+                ghosts.get(controlled).refreshPositionAndAngles(player.getX(), player.getY(),
+                    player.getZ(), player.getYaw(), player.getPitch());
+        }
         if (!freePlay) {
             List<Vec3d> current = tracks.get(tracks.size() - 1);
             if (current.size() < DAY_TICKS) {
@@ -720,6 +726,8 @@ public class DoppelgangerMod implements ModInitializer {
         for (int i = 0; i < ghosts.size(); i++) {
             ArmorStandEntity ghost = ghosts.get(i);
             if (ghost.isRemoved() || i >= tracks.size()) continue;
+            if (controlSession.selection().mode() == NaoControlSession.Mode.NPC
+                    && controlSession.selection().slot() == i + 1) continue;
             List<Vec3d> samples = tracks.get(i);
             if (samples.isEmpty()) continue;
             Vec3d previous = ghost.getPos();
@@ -840,7 +848,13 @@ public class DoppelgangerMod implements ModInitializer {
         }
         ServerPlayerEntity player = src.getServer().getPlayerManager().getPlayer(owner);
         if (player == null) return say(src, "Owner is offline.");
-        // Rewind only the clock and owner's location. World changes persist!
+        // Default: clock + owner position only; bounded block rewind requires opt-in.
+        if (regionRollbackEnabled && regionSnapshot != null) {
+            try { regionSnapshot.restore(); }
+            catch (RuntimeException ex) {
+                return say(src, "Day not advanced: bounded region restore failed: " + ex.getMessage());
+            }
+        }
         player.teleport(world, dawn.getX()+0.5, dawn.getY(), dawn.getZ()+0.5,
                 player.getYaw(), player.getPitch());
         loopTick = 0;
@@ -926,6 +940,10 @@ public class DoppelgangerMod implements ModInitializer {
         } catch (IOException ex) {
             return say(src, "Stop cancelled because saving failed: " + ex.getMessage());
         }
+        controlSession.release();
+        ownerBeforeControl = null;
+        regionSnapshot = null;
+        regionRollbackEnabled = false;
         clearGhosts();
         recording = false;
         freePlay = false;
