@@ -17,6 +17,7 @@ import java.util.logging.Logger;
 import java.io.IOException;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.item.Items;
@@ -80,6 +81,46 @@ public class DoppelgangerMod implements ModInitializer {
         social.load();
         sharedKnowledge = new SharedMemoryReader(memories.directory().resolve("nao_integrated_memory.md"));
         sharedKnowledge.refresh();
+    }
+    private static Path sessionOwnerFile() {
+        return FabricLoader.getInstance().getConfigDir().resolve("doppelganger/session-owner.txt");
+    }
+    private static Path mipCompletedFile() {
+        return FabricLoader.getInstance().getConfigDir().resolve("doppelganger/mip-completed.txt");
+    }
+    private static void writeAtomic(Path file, String value) throws IOException {
+        Files.createDirectories(file.getParent());
+        Path temp = file.resolveSibling(file.getFileName() + ".tmp");
+        try {
+            Files.writeString(temp, value, StandardCharsets.UTF_8);
+            try { Files.move(temp, file, java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING); }
+            catch (java.nio.file.AtomicMoveNotSupportedException ex) {
+                Files.move(temp, file, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally { Files.deleteIfExists(temp); }
+    }
+    private static void restoreMipCompletion() {
+        lastIntegratedTrainingDay = Integer.MIN_VALUE;
+        try {
+            if (Files.isRegularFile(mipCompletedFile()))
+                lastIntegratedTrainingDay = Integer.parseInt(
+                    Files.readString(mipCompletedFile(), StandardCharsets.UTF_8).trim());
+        } catch (IOException | NumberFormatException ex) {
+            LOG.warning("Could not restore MIP completion marker: " + ex.getMessage());
+        }
+    }
+    private static void tryAutomaticResume(MinecraftServer server) {
+        if (recording || server.getTicks() % 40 != 0 || !Files.isRegularFile(sessionOwnerFile())) return;
+        try {
+            UUID expected = UUID.fromString(Files.readString(sessionOwnerFile(), StandardCharsets.UTF_8).trim());
+            ServerPlayerEntity player = server.getPlayerManager().getPlayer(expected);
+            if (player == null || !Files.isRegularFile(snapshotFile())) return;
+            // Resume requires the original owner online in the saved dimension.
+            resume(player.getCommandSource());
+        } catch (IOException | IllegalArgumentException ex) {
+            LOG.warning("Automatic DNMS resume deferred: " + ex.getMessage());
+        }
     }
     private static int socialTalk(ServerCommandSource src, int from, int to) {
         if (!isOwner(src)) return say(src, "Only playable Nao may trigger social interactions.");
@@ -378,6 +419,7 @@ public class DoppelgangerMod implements ModInitializer {
         rememberGhostPositions();
         if (life != null) life.save();
         if (social != null) social.save();
+        if (owner != null) writeAtomic(sessionOwnerFile(), owner.toString());
         GenerationCheckpointStore.publish(checkpointRoot(), snapshotFile(),
             memories.directory(), playerFile, life == null ? null : lifeFile(),
             social == null ? null : socialFile());
@@ -471,6 +513,7 @@ public class DoppelgangerMod implements ModInitializer {
             brains.get(tracks.size() - 1).resetObservationAnchor(player.getPos());
         }
         scheduleInitialized = false;
+        restoreMipCompletion();
         spawnGhosts();
         report("Resumed JSON snapshot with " + tracks.size() + " recorded Nao tracks.");
         return say(src, "Resumed saved session: " + tracks.size() + "/24 tracks, day " + day
@@ -700,6 +743,13 @@ public class DoppelgangerMod implements ModInitializer {
             )
         );
         ServerTickEvents.END_SERVER_TICK.register(DoppelgangerMod::tick);
+        ServerTickEvents.END_SERVER_TICK.register(DoppelgangerMod::tryAutomaticResume);
+        ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
+            if (recording) {
+                try { saveSession(); }
+                catch (IOException ex) { LOG.warning("Final DNMS checkpoint failed: " + ex.getMessage()); }
+            }
+        });
     }
 
     private static int start(ServerCommandSource src) {
@@ -741,6 +791,8 @@ public class DoppelgangerMod implements ModInitializer {
         scheduleInitialized = false;
         lastScheduledDay = Long.MIN_VALUE;
         lastIntegratedTrainingDay = Integer.MIN_VALUE;
+        try { Files.deleteIfExists(mipCompletedFile()); }
+        catch (IOException ex) { report("Could not reset MIP marker: " + ex.getMessage()); }
         growthObserved = Long.MIN_VALUE;
         growthDay = Long.MIN_VALUE;
         return say(src, "Day 1, loop 1/24. Play, then /doppel next.");
@@ -1030,6 +1082,8 @@ public class DoppelgangerMod implements ModInitializer {
         regionRollbackEnabled = false;
         clearGhosts();
         recording = false;
+        try { Files.deleteIfExists(sessionOwnerFile()); }
+        catch (IOException ex) { LOG.warning("Could not clear auto-resume marker: " + ex.getMessage()); }
         freePlay = false;
         playableAutoMove = false;
         tracks.clear();
@@ -1091,6 +1145,7 @@ public class DoppelgangerMod implements ModInitializer {
             logMIP("Daily 00:00 (day " + day + "): "
                 + MemoryIntegrationPatch.integrate(memories.directory()));
             if (sharedKnowledge != null) sharedKnowledge.refresh();
+            writeAtomic(mipCompletedFile(), Integer.toString(day));
             lastIntegratedTrainingDay = day;
         } catch (IOException ex) {
             logMIP("Daily integration failed, will retry: " + ex.getMessage());
