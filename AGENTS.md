@@ -1,5 +1,14 @@
 # AGENTS.md — Doppel NPC Management System (DNMS)
 
+## 無人再起動復元とプレイアブル奈央の途中合流（2026-11-21）
+
+24人の訓練を完了したフリープレイで `/doppel life on` と `/doppel offline on` を有効にし、セッションをチェックポイント保存しておくと、サーバー再起動後はオーナーのログインを待たずに、保存済みのディメンション・24人の個別記憶・位置・関係性・AI状態を復元し、NPCシミュレーションを再開します。復元には `session-owner.txt`、最新の正常な世代チェックポイントと保存済み `player.json` が必要です。失敗時は1200サーバーtick間隔で再試行します。
+
+オーナーが後からログインした場合、稼働中のNPCセッションを**再ロードせず**、進行した世界とNPC状態を維持します。`/doppel control select <1..24>` で任意の奈央に途中合流できます。選択したNPCの自律移動だけを止め、残りのNPCは活動を継続します。プレイヤーの移動経験は選択した奈央の個別記憶へ記録します。サーバー停止中の経過時間は早送りしません。再起動後のサーバーtickで進行します。
+
+**制約:** Minecraft実機での再起動・チャンクロード・長時間無人稼働・クラッシュ耐性は未検証です。NPCは防具立ての代替エンティティで、プレイアブル操作は既存プレイヤーアバターの位置切り替えです。オーナー不在の訓練中ループは自動復元しません。旧記述の「無人コールドブート復元は未実装」はこの節により更新されます。
+
+
 ## Post-24 free-play day advance and playable Nao (2026-11-21)
 
 After all **24 Nao identities** have been trained and `freePlay` is active, the external day-advance command `/doppel day next` starts the following Minecraft day at 06:00 (world time tick 0) **without recreating NPCs, resetting their AI, restoring blocks, or erasing world events**. It checkpoints before changing days, keeps each NPC's goal/brain, position and relationship state, and saves the new day. The legacy `/doppel next` remains supported in free-play.
