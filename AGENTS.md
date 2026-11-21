@@ -1,5 +1,18 @@
 # AGENTS.md — Doppel NPC Management System (DNMS)
 
+## 日本語：256人と全記憶複製（現行実装）
+- 最大人数は**256人**（`/doppel dashboard max 256`、設定ファイル `config/doppelganger/max-naos.txt`）。**初期生成は24人**（`/doppel dashboard bootstrap`）で、フリープレイ中に `/doppel dashboard add <人数>` で追加する。24人の手動訓練は従来どおり。
+- 人数上限を256に拡張した対象：個別UUID・生活データ、プレイアブル選択、スロット引数、記録スナップショット、外見登録、関係保存、個別記憶、世代チェックポイント、MIPの統合対象。
+- MIP統合の際、**他の奈央の元エピソード行を各奈央の個別Markdownへ物理複製**する。`shared_from_nao=<番号>` を付けて出典を保存し、元の `- day=` 行と区別する。各ファイルの `DNMS_SHARED_COPY_BEGIN/END` 範囲を置換して再同期時のコピー重複を防ぐ。本人の新しい記憶は保持する。共通索引 `nao_integrated_memory.md` は引き続き参照可能。
+- 注意：256人への完全複製は**記憶件数×人数**のディスク容量を消費し、世代チェックポイントの容量も増える。大量データでの負荷試験、実機テスト、異常終了時の複数ファイル一括整合性保証は未完了。複製済みエピソードを本人の身体技能として再学習しない。
+
+## English: 256 Naos and Full Memory Replication (Current Implementation)
+- The maximum population is **256** (`/doppel dashboard max 256`, persisted in `config/doppelganger/max-naos.txt`). **Bootstrap still creates 24** (`/doppel dashboard bootstrap`); use `/doppel dashboard add <count>` during free-play to add more. The original 24-loop manual training path remains.
+- Expanded 256-slot support includes stable identities, life profiles, playable selection, command slots, snapshots, appearance metadata, social persistence, personal journals, generation checkpoints and MIP integration.
+- Each MIP merge now **physically copies the original episodic lines of other Naos into each Nao's Markdown journal**, tagged `shared_from_nao=<source>`. Shared entries are separated from personal `- day=` training events by a bounded `DNMS_SHARED_COPY_BEGIN/END` section that is replaced on subsequent merges, avoiding duplicate copies. Newly recorded personal experiences are retained. The shared `nao_integrated_memory.md` index remains readable.
+- Caution: 256-way full copying scales disk usage with **population × memory volume**, also increasing generation-checkpoint size. Large-load tests, in-game validation and fully atomic cross-journal synchronization are outstanding. Replicated episodes are not replayed as the recipient's own physical skill training.
+
+
 ## 日本語：外側の管理UI・生活プロファイル（2026-11-21）
 
 - **管理UI（サーバー専用）:** `/doppel dashboard` はMinecraftチャットにクリック可能な「DOPPELGÄNGER UNLIMITED」管理画面を表示します。クライアント専用GUIやWeb画面ではありません。現在の人数、上限、状態、NPCごとの職業・住居・長期目標を表示し、追加・初期生成・詳細表示へ移動できます。
