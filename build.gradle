@@ -21,5 +21,6 @@ sourceSets {
         java.srcDir 'patches/memory-integration/src'
         java.srcDir 'patches/automatic-movement/src'
         java.srcDir 'patches/reward-learning/src'
+        java.srcDir 'patches/nao-growth/src'
     }
 }
