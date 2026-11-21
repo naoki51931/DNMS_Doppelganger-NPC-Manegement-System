@@ -1,5 +1,14 @@
 # Doppel NPC Management System (DNMS)
 
+## Restart recovery, durable MIP ledger and contextual dialogue (2026-11-21)
+
+- **Auto-resume:** An active session writes `config/doppelganger/session-owner.txt` on checkpoint. After restart the server checks for the saved owner every 40 ticks and calls the existing resume flow when that player is online and in the recorded dimension. Explicit `/doppel stop` clears the marker. `SERVER_STOPPING` attempts a final checkpoint. This is **owner-login recovery**, not unattended NPC simulation while the owner is offline. A corrupt checkpoint, unavailable dimension or failed save can still prevent recovery.
+- **Position recovery:** Each living stand-in's coordinates and UUID are saved to `nao_lives.json`; periodic checkpoints are now attempted every 100 server ticks (approximately 5 seconds at 20 TPS), plus clean shutdown. An abrupt crash can still lose up to the most recent successful checkpoint interval; disk failure cannot be guaranteed away.
+- **Midnight MIP ledger:** `mip-completed.txt` persists the last successful integration key. Training loops use the active Nao count, while free-play days use a separate day-key range; the catch-up logic skips already completed keys and retries failures. The integrated index is rebuilt atomically from personal journals, with duplicate identical entries removed per Nao. Crash-consistency across the independent marker and generation snapshots is not fully transactional.
+- **Dynamic dialogue:** When life AI is enabled, close stand-ins use their current goals, inventory category counts, coordinates, directed relationship state and nearest relevant integrated experience to assemble a two-way Japanese exchange. Dialogue is logged into both personal journals. This is context-conditioned compositional dialogue, **not a language model**; sentence structures remain programmed.
+- **Verification:** Consult the latest GitHub Actions run for compilation. Minecraft runtime and fault-injection tests remain outstanding.
+
+
 ## Current implementation status (2026-11-21; supersedes earlier stage tables)
 
 - **Autonomous social interaction:** When `/doppel life on` is enabled, nearby stand-ins (within six blocks) exchange context-selected Japanese dialogue lines every 400 loop ticks. Both directed familiarity values increase, individual SOCIAL skill and TALK evidence are recorded, and `npc_dialogue` events enter the per-Nao journals. Mutual familiarity/trust thresholds enable reciprocal romance opt-in and bounded `ROMANCE_REQUEST` affection growth, recorded as `npc_romance`. This is deterministic, template-based autonomous behavior, **not** open-ended language generation, sophisticated emotional simulation, or an interactive dialogue UI. Existing single shared personality remains unchanged.
