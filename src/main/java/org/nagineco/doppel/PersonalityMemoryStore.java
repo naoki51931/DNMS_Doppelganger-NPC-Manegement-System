@@ -105,6 +105,37 @@ public final class PersonalityMemoryStore {
         eventCounts[index]++;
     }
 
+    public void rememberReward(int index, int day, int tick, HabitBrain brain, double score) {
+        if (index < 0 || index >= 24 || brain.lastManualMove() == null || score == 0) return;
+        pending[index].add("- day=" + day + " tick=" + tick
+            + " reward_move=" + brain.lastManualMove()
+            + " reward_emotion=" + brain.lastManualEmotion()
+            + " reward_reason=" + brain.lastManualReason()
+            + " reward_part=" + brain.lastManualDayPart()
+            + " reward_score=" + score + "\\n");
+    }
+
+    public void restoreRewards(int index, HabitBrain brain) throws IOException {
+        for (String line : Files.readAllLines(memoryPath(index), StandardCharsets.UTF_8)) {
+            if (!line.startsWith("- day=") || !line.contains(" reward_move=")) continue;
+            try {
+                String move = null, emotion = null, reason = null;
+                int part = 0;
+                double score = 0;
+                for (String token : line.split(" ")) {
+                    if (token.startsWith("reward_move=")) move = token.substring(12);
+                    if (token.startsWith("reward_emotion=")) emotion = token.substring(15);
+                    if (token.startsWith("reward_reason=")) reason = token.substring(14);
+                    if (token.startsWith("reward_part=")) part = Integer.parseInt(token.substring(12));
+                    if (token.startsWith("reward_score=")) score = Double.parseDouble(token.substring(13));
+                }
+                if (move != null && emotion != null && reason != null && part >= 0 && part <= 1)
+                    brain.learnReward(HabitBrain.Move.valueOf(move), HabitBrain.Emotion.valueOf(emotion),
+                        HabitBrain.Reason.valueOf(reason), part, score);
+            } catch (IllegalArgumentException ignored) { /* Ignore malformed reward records. */ }
+        }
+    }
+
     public void flush() throws IOException {
         for (int i = 0; i < 24; i++) {
             if (pending[i].isEmpty()) continue;
