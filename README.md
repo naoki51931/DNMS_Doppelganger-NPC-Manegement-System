@@ -1,6 +1,6 @@
-# Doppelganger NPC System
+# Doppel NPC Management System (DNMS)
 
-Experimental Minecraft Java Edition **Fabric 1.21.1** server mod plus C++ console prototypes for a 24-character daily loop.
+**DNMS** (formerly Doppelganger NPC System) is an experimental Minecraft Java Edition **Fabric 1.21.1** server mod plus C++ console prototypes for a 24-character daily loop.
 
 ## Fabric mod (early MVP)
 
