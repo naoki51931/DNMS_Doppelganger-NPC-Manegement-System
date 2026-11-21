@@ -69,3 +69,17 @@ shared personality or the derived index. Emit console messages by default
 and expose the last 20 through the logs command. Maintain the standalone CLI
 as well as the callable `integrate(Path)` API. Do not claim the generated
 index directly affects AI decisions until a separate consumer is implemented.
+
+
+## Daily MIP scheduling contract
+
+MIP default schedule is Minecraft **00:00** (tick **18000**), not tick 0.
+The operator can inspect or change it with `/doppel mip time [HH:mm]`.
+Persist the setting in `config/doppelganger/mip.time`. Scheduled integration
+requires MIP ON, an active Doppel session and initialized memory storage.
+Trigger on forward time crossings, at most once per underlying Minecraft day,
+and do not replay missed times after large clock jumps or repeated rewinds.
+Flush individual journals before integration. Manual `/doppel mip run` remains
+available. `/doppel next` and `/doppel stop` flush but do not merge on their
+own. Note that the prototype rewinds the Minecraft clock repeatedly and
+therefore a single Minecraft day ID may cover multiple training loops.
