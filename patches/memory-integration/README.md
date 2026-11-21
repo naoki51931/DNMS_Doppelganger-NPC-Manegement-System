@@ -81,3 +81,24 @@ free-form diary text, true emotion recognition, personality cloning, or an LLM.
 - Journal contents may reveal in-game locations and user-supplied emotion labels;
   keep server data private.
 - Build and end-to-end Minecraft integration are not verified yet.
+
+
+## Fabric automatic integration (default ON)
+
+The main Fabric mod now compiles this patch source through Gradle and invokes
+`MemoryIntegrationPatch.integrate(Path)` automatically when the memory store
+is initialized and after journals are flushed by `/doppel next` or
+`/doppel stop`. The standalone Java CLI remains available.
+
+Operator commands: `/doppel mip status`, `/doppel mip logs`,
+`/doppel mip run`, `/doppel mip on`, `/doppel mip off`.
+
+The default is **ON**. The setting persists at
+`config/doppelganger/mip.enabled`. Turning MIP OFF stops automatic integration
+but never deletes journals or the last generated integrated index. Turning ON
+re-integrates immediately when memory storage is available. Console logging is
+enabled by default; the last 20 integration messages are available via
+`/doppel mip logs`. Integration occurs at the documented command boundaries,
+not continuously on every Minecraft tick.
+
+The live NPC AI still does not consume the integrated Markdown index.
