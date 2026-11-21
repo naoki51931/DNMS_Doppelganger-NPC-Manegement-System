@@ -19,10 +19,10 @@ class NaoCoreModelsTest {
         NaoControlSession session = new NaoControlSession();
         assertEquals(NaoControlSession.Mode.OWNER, session.selection().mode());
         UUID id = UUID.randomUUID();
-        assertEquals(id, session.select(24, id).logicalId());
+        assertEquals(id, session.select(256, id).logicalId());
         session.release();
         assertEquals(0, session.selection().slot());
-        assertThrows(IllegalArgumentException.class, () -> session.select(25, id));
+        assertThrows(IllegalArgumentException.class, () -> session.select(257, id));
     }
     @Test void fullWorldRollbackCannotBeEnabledPrematurely() {
         assertThrows(UnsupportedOperationException.class,
