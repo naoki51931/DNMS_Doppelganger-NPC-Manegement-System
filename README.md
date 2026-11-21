@@ -1,5 +1,26 @@
 # Doppel NPC Management System (DNMS)
 
+## 日本語：外側の管理UI・生活プロファイル（2026-11-21）
+
+- **管理UI（サーバー専用）:** `/doppel dashboard` はMinecraftチャットにクリック可能な「DOPPELGÄNGER UNLIMITED」管理画面を表示します。クライアント専用GUIやWeb画面ではありません。現在の人数、上限、状態、NPCごとの職業・住居・長期目標を表示し、追加・初期生成・詳細表示へ移動できます。
+- **初期生成:** `/doppel dashboard bootstrap` で、オーナーの現在位置を基点にデフォルト24人の奈央をフリープレイとして初期生成します。従来の24回訓練とは別の簡易初期化経路です。AIの習熟・人生経験が24人分自動生成されるわけではありません。
+- **人数上限:** `/doppel dashboard max <1..24>` で最大人数を設定し、`config/doppelganger/max-naos.txt` に保存します。デフォルトは24人。既存コードの固定24人前提（記憶ファイル、スロット、UI、セーブ）により、25人以上は**未対応**です。将来の設計目標として256人は検討できますが、性能・記憶・チェックポイント形式の改修と負荷試験が必要です。
+- **追加:** `/doppel dashboard add <1..24>` はフリープレイ中、上限の範囲内で新しい奈央を追加します。削除コマンドは設けていません。
+- **生活プロファイル:** `/doppel dashboard job <slot> <name>`、`home <slot> <name>`、`goal <slot> <name>` で職業・住居名・長期目標を保存します。`profile <slot>` で確認します。1日のルーチンと夕方の関係イベントを個別の記憶に記録します。**現段階では実際の通勤経路探索、仕事、家事、育児、帰宅移動を実行するAIではありません。**
+- **個別関係:** `/doppel dashboard relation <from> <to> <FRIEND|FAMILY|COLLEAGUE|PARTNER|SPOUSE|PARENT|CHILD>` で方向付きの関係ラベルを保存します。家族・結婚・育児の実世界シミュレーションは未実装です。
+- **記憶同期の設計課題:** 現在のMIPは共有索引の生成・参照であり、24人全員に同じエピソード記憶を物理的に複製してはいません。小説の「全員が他の23人の経験を自分の記憶として想起する」を実現するには、イベントID・出典UUID・発生時刻・同期世代を持つ共通の不変イベントログと、各奈央の既読カーソル／由来付き検索を実装する必要があります。二重学習・重複配信・保存途中の障害への対策が必要です。
+
+## English: Outer-World Dashboard and Life Profiles (2026-11-21)
+
+- **Server-only interactive UI:** `/doppel dashboard` opens a clickable Minecraft chat dashboard labeled “DOPPELGÄNGER UNLIMITED.” It is **not** a custom client screen or web dashboard. It displays population, cap, session state and each Nao's job, home and long-term goal.
+- **Default population:** `/doppel dashboard bootstrap` initializes a default of 24 Nao identities in free-play at the owner's location. This is an alternative to 24 manually trained loops and does not fabricate 24 distinct trained histories.
+- **Maximum:** `/doppel dashboard max <1..24>` persists the population cap in `config/doppelganger/max-naos.txt`. Default is 24. **More than 24 is not supported** by the existing fixed-slot memory, save and command architecture. A theoretical future target of 256 requires refactoring and load tests.
+- **Add identities:** `/doppel dashboard add <1..24>` adds identities in free-play without exceeding the cap. There is no delete command.
+- **Life profiles:** `job`, `home`, `goal`, and `profile` subcommands manage persisted per-Nao job, residence label and long-term goal. A daily routine and evening relationship check-in are recorded in individual journals. **Actual commuting, jobs, household activities, childcare and homeward navigation are not yet simulated.**
+- **Directed relationships:** `/doppel dashboard relation <from> <to> <role>` persists FRIEND, FAMILY, COLLEAGUE, PARTNER, SPOUSE, PARENT or CHILD roles. This is not a full marriage, family or childcare simulation.
+- **Memory synchronization remains a design task:** MIP currently builds and reads a shared index; it does not replicate every episode into every Nao's personal memory. Full novel-style recall needs immutable attributed event IDs, origin UUIDs, event timestamps, synchronization generations and per-Nao cursors, with deduplication and crash-safe checkpoints.
+
+
 <!-- DNMS_BILINGUAL_GUIDE_BEGIN -->
 
 ## 日本語ガイド / Japanese Guide (現行仕様)
