@@ -59,6 +59,23 @@ public class DoppelgangerMod implements ModInitializer {
     private static NaoSocialStore social;
     private static SharedMemoryReader sharedKnowledge;
     private static boolean lifeAiEnabled = false;
+    private static boolean offlineNpcMode = false;
+    private static Path offlineNpcModeFile() {
+        return FabricLoader.getInstance().getConfigDir().resolve("doppelganger/offline-npcs.enabled");
+    }
+    private static int offlineNpcModeSet(ServerCommandSource src, boolean enabled) {
+        try {
+            Files.createDirectories(offlineNpcModeFile().getParent());
+            Files.writeString(offlineNpcModeFile(), enabled ? "on" : "off", StandardCharsets.UTF_8);
+            offlineNpcMode = enabled;
+            return say(src, "Owner-offline NPC simulation " + (enabled ? "ON" : "OFF"));
+        } catch (IOException ex) { return say(src, "Offline NPC setting failed: " + ex.getMessage()); }
+    }
+    private static int offlineNpcModeStatus(ServerCommandSource src) {
+        return say(src, "Owner-offline NPC simulation " + (offlineNpcMode ? "ON" : "OFF")
+            + " (requires an initialized or resumed session and /doppel life on).");
+    }
+
     private static Path socialFile() {
         return FabricLoader.getInstance().getConfigDir().resolve("doppelganger/nao_social.json");
     }
@@ -456,6 +473,21 @@ public class DoppelgangerMod implements ModInitializer {
             memories.directory(), playerFile, life == null ? null : lifeFile(),
             social == null ? null : socialFile());
     }
+    private static void saveOfflineSession() throws IOException {
+        if (memories == null || owner == null || world == null) return;
+        Path playerFile = playerSnapshotFile();
+        if (!Files.isRegularFile(playerFile))
+            throw new IOException("Missing last playable owner snapshot");
+        memories.flush();
+        RecordingSnapshotStore.save(snapshotFile(), tracks, day, selected, freePlay);
+        rememberGhostPositions();
+        if (life != null) life.save();
+        if (social != null) social.save();
+        writeAtomic(sessionOwnerFile(), owner.toString());
+        GenerationCheckpointStore.publish(checkpointRoot(), snapshotFile(),
+            memories.directory(), playerFile, life == null ? null : lifeFile(),
+            social == null ? null : socialFile());
+    }
     private static int saveCommand(ServerCommandSource src) {
         if (!recording) return say(src, "No active session to save.");
         if (!isOwner(src)) return say(src, "Only the playable Nao can save this session.");
@@ -670,6 +702,10 @@ public class DoppelgangerMod implements ModInitializer {
             rewardLearning = Files.exists(file) && Files.readString(file, StandardCharsets.UTF_8).trim().equalsIgnoreCase("on");
         } catch (IOException ex) { rewardLearning = false; }
         try {
+            offlineNpcMode = Files.isRegularFile(offlineNpcModeFile())
+                && Files.readString(offlineNpcModeFile(), StandardCharsets.UTF_8).trim().equalsIgnoreCase("on");
+        } catch (IOException ex) { offlineNpcMode = false; }
+        try {
             Path setting = mipSettingFile();
             if (Files.exists(setting))
                 mipEnabled = !Files.readString(setting, StandardCharsets.UTF_8).trim().equalsIgnoreCase("off");
@@ -689,6 +725,10 @@ public class DoppelgangerMod implements ModInitializer {
                     .then(literal("time").then(argument("clock", StringArgumentType.word())
                         .executes(c -> growthTime(c.getSource(), StringArgumentType.getString(c, "clock"))))))
                 .then(literal("save").executes(c -> saveCommand(c.getSource())))
+                .then(literal("offline")
+                    .then(literal("on").executes(c -> offlineNpcModeSet(c.getSource(), true)))
+                    .then(literal("off").executes(c -> offlineNpcModeSet(c.getSource(), false)))
+                    .then(literal("status").executes(c -> offlineNpcModeStatus(c.getSource()))))
                 .then(literal("life")
                     .then(literal("on").executes(c -> lifeToggle(c.getSource(), true)))
                     .then(literal("off").executes(c -> lifeToggle(c.getSource(), false)))
@@ -778,8 +818,11 @@ public class DoppelgangerMod implements ModInitializer {
         ServerTickEvents.END_SERVER_TICK.register(DoppelgangerMod::tryAutomaticResume);
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
             if (recording) {
-                try { saveSession(); }
-                catch (IOException ex) { LOG.warning("Final DNMS checkpoint failed: " + ex.getMessage()); }
+                try {
+                    ServerPlayerEntity p = owner == null ? null : server.getPlayerManager().getPlayer(owner);
+                    if (p != null && p.getServerWorld() == world) saveSession();
+                    else saveOfflineSession();
+                } catch (IOException ex) { LOG.warning("Final DNMS checkpoint failed: " + ex.getMessage()); }
             }
         });
     }
@@ -835,9 +878,10 @@ public class DoppelgangerMod implements ModInitializer {
         tickGrowth(server);
         if (!recording || world == null || owner == null) return;
         ServerPlayerEntity player = server.getPlayerManager().getPlayer(owner);
-        if (player == null || player.getServerWorld() != world) return;
+        boolean ownerPresent = player != null && player.getServerWorld() == world;
+        if (!ownerPresent && !(offlineNpcMode && lifeAiEnabled)) return;
         lastTickWasAutomatic = playableAutoMove;
-        if (playableAutoMove && memories != null && !brains.isEmpty()
+        if (ownerPresent && playableAutoMove && memories != null && !brains.isEmpty()
                 && loopTick != lastAutoTick) {
             lastAutoTick = loopTick;
             int currentIndex = freePlay ? Math.min(selected, brains.size()-1) : tracks.size()-1;
@@ -845,14 +889,14 @@ public class DoppelgangerMod implements ModInitializer {
             AutomaticMovementPatch.move(player, choice);
             if (loopTick % 200 == 0) report("Playable Nao AMP selected " + choice);
         }
-        observePlayable(player);
-        if (freePlay && controlSession.selection().mode() == NaoControlSession.Mode.NPC) {
+        if (ownerPresent) observePlayable(player);
+        if (ownerPresent && freePlay && controlSession.selection().mode() == NaoControlSession.Mode.NPC) {
             int controlled = controlSession.selection().slot() - 1;
             if (controlled < ghosts.size() && !ghosts.get(controlled).isRemoved())
                 ghosts.get(controlled).refreshPositionAndAngles(player.getX(), player.getY(),
                     player.getZ(), player.getYaw(), player.getPitch());
         }
-        if (!freePlay) {
+        if (!freePlay && ownerPresent) {
             List<Vec3d> current = tracks.get(tracks.size() - 1);
             if (current.size() < DAY_TICKS) {
                 current.add(player.getPos());
@@ -981,7 +1025,10 @@ public class DoppelgangerMod implements ModInitializer {
         autonomousSocialTick();
         long serverTick = server.getTicks();
         if (serverTick - lastCheckpointTick >= 100 || lastCheckpointTick == Long.MIN_VALUE) {
-            try { saveSession(); lastCheckpointTick = serverTick; }
+            try {
+                if (ownerPresent) saveSession(); else saveOfflineSession();
+                lastCheckpointTick = serverTick;
+            }
             catch (IOException ex) {
                 lastCheckpointTick = serverTick; // Retry at the next interval, not every tick.
                 report("Periodic JSON save failed: " + ex.getMessage());
