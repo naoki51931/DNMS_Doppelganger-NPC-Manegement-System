@@ -271,19 +271,45 @@ public class DoppelgangerMod implements ModInitializer {
         regionSnapshot = null;
         return say(src, "Bounded block rollback disabled.");
     }
+    private static int advanceFreePlayDay(ServerCommandSource src) {
+        if (!recording || !freePlay || tracks.size() != CHARACTERS || life == null
+                || life.count() < CHARACTERS)
+            return say(src, "All 24 Nao identities must be present before advancing free-play days.");
+        if (!isOwner(src)) return say(src, "Only the playable Nao owner may advance the day.");
+        ServerPlayerEntity player = src.getServer().getPlayerManager().getPlayer(owner);
+        if (player == null || player.getServerWorld() != world)
+            return say(src, "Playable Nao must be online in the session dimension.");
+        integrateTrainingMidnight();
+        try { saveSession(); }
+        catch (IOException ex) { return say(src, "Day advance cancelled: " + ex.getMessage()); }
+        day++;
+        loopTick = 0;
+        world.setTimeOfDay(0); // Advance the clock only; preserve NPC state and world changes.
+        scheduleInitialized = false;
+        lastObservedTime = Long.MIN_VALUE;
+        resetObservations(player);
+        report("Free-play day " + day + " started; all NPC brains and positions retained.");
+        try { saveSession(); }
+        catch (IOException ex) { report("New-day checkpoint failed: " + ex.getMessage()); }
+        return say(src, "Free-play day " + day + ": selected playable Nao "
+            + (selected + 1) + "; other Nao NPC AI continues.");
+    }
+
     private static int controlNao(ServerCommandSource src, int slot) {
-        if (!isOwner(src) || !freePlay || life == null || slot > life.count()
+        if (!isOwner(src) || !freePlay || life == null || tracks.size() != CHARACTERS || slot > life.count()
                 || slot > ghosts.size() || ghosts.get(slot - 1).isRemoved())
             return say(src, "Free-play and a live NPC are required.");
         ServerPlayerEntity player = src.getServer().getPlayerManager().getPlayer(owner);
         if (player == null) return say(src, "Owner offline.");
         if (controlSession.selection().mode() == NaoControlSession.Mode.OWNER)
             ownerBeforeControl = player.getPos();
+        // Release the previous controlled NPC before assigning the new one.
         controlSession.select(slot, UUID.fromString(life.get(slot - 1).id));
         selected = slot - 1;
         Vec3d pos = ghosts.get(selected).getPos();
         player.teleport(world, pos.x, pos.y, pos.z, player.getYaw(), player.getPitch());
-        return say(src, "Player-avatar control assigned to Nao " + slot + "; ghost AI paused.");
+        return say(src, "Playable character is Nao " + slot
+            + "; this NPC AI pauses while controlled; all other NPCs continue.");
     }
     private static int controlRelease(ServerCommandSource src) {
         if (!isOwner(src)) return say(src, "Owner only.");
@@ -731,6 +757,8 @@ public class DoppelgangerMod implements ModInitializer {
                     .then(literal("time").then(argument("clock", StringArgumentType.word())
                         .executes(c -> growthTime(c.getSource(), StringArgumentType.getString(c, "clock"))))))
                 .then(literal("save").executes(c -> saveCommand(c.getSource())))
+                .then(literal("day").then(literal("next")
+                    .executes(c -> advanceFreePlayDay(c.getSource()))))
                 .then(literal("offline")
                     .then(literal("on").executes(c -> offlineNpcModeSet(c.getSource(), true)))
                     .then(literal("off").executes(c -> offlineNpcModeSet(c.getSource(), false)))
@@ -895,7 +923,20 @@ public class DoppelgangerMod implements ModInitializer {
             AutomaticMovementPatch.move(player, choice);
             if (loopTick % 200 == 0) report("Playable Nao AMP selected " + choice);
         }
-        if (ownerPresent) observePlayable(player);
+        if (ownerPresent) {
+            observePlayable(player);
+            if (freePlay && controlSession.selection().mode() == NaoControlSession.Mode.NPC
+                    && memories != null && loopTick % 20 == 0) {
+                int playableSlot = controlSession.selection().slot() - 1;
+                if (playableSlot >= 0 && playableSlot < life.count()) {
+                    Vec3d p = player.getPos();
+                    memories.rememberEvent(playableSlot, day, loopTick, "playable_experience",
+                        "position=" + p.x + "," + p.y + "," + p.z
+                            + " goal=" + life.get(playableSlot).goal);
+                    life.rememberPosition(playableSlot, p.x, p.y, p.z);
+                }
+            }
+        }
         if (ownerPresent && freePlay && controlSession.selection().mode() == NaoControlSession.Mode.NPC) {
             int controlled = controlSession.selection().slot() - 1;
             if (controlled < ghosts.size() && !ghosts.get(controlled).isRemoved())
@@ -1053,7 +1094,7 @@ public class DoppelgangerMod implements ModInitializer {
             day++;
             loopTick = 0;
             world.setTimeOfDay(0);
-            return say(src, "Day " + day + " started (AI NPC simulation).");
+            return say(src, "Day " + day + " started (NPC AI continues; playable selection retained).");
         }
         ServerPlayerEntity player = src.getServer().getPlayerManager().getPlayer(owner);
         if (player == null) return say(src, "Owner is offline.");
