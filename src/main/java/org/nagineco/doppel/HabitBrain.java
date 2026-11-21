@@ -72,6 +72,53 @@ public final class HabitBrain {
         return Move.values()[best];
     }
 
+    /**
+     * One shared personality scores the combined demonstrations of all 24 Nao.
+     * Individual memory gives the current character extra influence, while the
+     * shared profile controls motivation affinity. No separate personality exists.
+     */
+    public static Move sharedDecision(List<HabitBrain> all, int characterIndex,
+                                      int dayTick, PersonalityMemoryStore personality) {
+        if (all.isEmpty()) return Move.STAY;
+        int part = dayTick >= 12000 ? 1 : 0;
+        double[] scores = new double[Move.values().length];
+        for (int j = 0; j < all.size(); j++) {
+            HabitBrain brain = all.get(j);
+            double individualBoost = j == characterIndex ? 2.0 : 1.0;
+            for (Reason reason : Reason.values()) {
+                // A preference of 0 suppresses the action evidence for this reason.
+                double affinity = personality.preference(reason) / 5.0;
+                for (Emotion emotion : Emotion.values()) {
+                    int[] observed = brain.counts[part][emotion.ordinal()][reason.ordinal()];
+                    for (int m = 0; m < scores.length; m++) {
+                        scores[m] += observed[m] * affinity * individualBoost;
+                    }
+                }
+            }
+        }
+        int best = 0;
+        for (int m = 1; m < scores.length; m++)
+            if (scores[m] > scores[best]) best = m;
+        return scores[best] > 0 ? Move.values()[best] : Move.STAY;
+    }
+
+    public static Vec3d applyMove(Vec3d position, Move move) {
+        double distance = 0.12;
+        return switch (move) {
+            case NORTH -> position.add(0, 0, -distance);
+            case SOUTH -> position.add(0, 0, distance);
+            case WEST -> position.add(-distance, 0, 0);
+            case EAST -> position.add(distance, 0, 0);
+            default -> position;
+        };
+    }
+
+    public Move latestMove() {
+        if (observations.size() < 2) return Move.STAY;
+        return classify(observations.get(observations.size() - 1)
+                .subtract(observations.get(observations.size() - 2)));
+    }
+
     public Vec3d step(Vec3d position, int dayTick) {
         double distance = 0.12;
         return switch (decide(dayTick)) {
