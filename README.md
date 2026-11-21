@@ -1,5 +1,50 @@
 # Doppel NPC Management System (DNMS)
 
+<!-- DNMS_BILINGUAL_GUIDE_BEGIN -->
+
+## 日本語ガイド / Japanese Guide (現行仕様)
+
+### 概要
+DNMSはMinecraft Java Edition **Fabric 1.21.1**向けの実験的なサーバーMODです。プレイヤーの経験を24人の「奈央」に記録し、個別の記憶・UUID・行動目標・簡易インベントリ・人間関係を維持しながら、共通人格とMIP統合記憶を参照するNPC生活を目指します。NPCの外見は現在、プレイヤー型エンティティではなく防具立てを使用しています。
+
+### 導入と基本操作
+Java 21とGradle 8.xで `gradle build` を実行し、生成JARとFabric APIをFabric 1.21.1サーバーに導入します。管理者権限で `/doppel start` を実行し、行動を記録します。`/doppel next` で次の奈央に進み、24人が揃うとフリープレイに移行します。`/doppel growth time HH:mm` で訓練中の追加時刻を設定できます（初期値06:00）。`/doppel status` で進捗を確認します。
+
+### 24人の生活とプレイアブル選択
+24人完成後、`/doppel day next` で次の日の06:00へ進みます。NPCのAI・位置・関係性と世界の出来事は維持されます。`/doppel control select <1..24>` で任意の奈央をプレイアブルとして選択し、選択中の奈央の自律移動だけを停止します。`/doppel control release` で解除します。`/doppel select <1..24>` は位置への移動のみで、プレイアブル切り替えではありません。現在はプレイヤーアバターを移動させる簡易方式で、独立した身体や完全なインベントリ交換は未実装です。
+
+### 再起動後の無人NPC生活と途中合流
+`/doppel life on` と `/doppel offline on` を有効化し、24人のフリープレイを `/doppel save` で保存します。サーバー再起動後は、保存済みオーナーのログインを待たずにNPCセッションを復元する処理があり、NPCは稼働中のサーバーtickに沿って活動します。オーナーが後からログインしても稼働中のNPC生活を再ロードせず、`/doppel control select <slot>` で合流します。サーバー停止中の実時間は早送りしません。復元には正常なチェックポイント、保存済みプレイヤー状態・ディメンション、セッションオーナー情報が必要です。**Minecraft実機での無人再起動・長時間稼働は未検証**です。
+
+### 記憶・AI・保存
+個別記憶は `config/doppelganger/memories/nao_01.md` ～ `nao_24.md`、共通人格は `nao_personality.md`、MIP統合記憶は `nao_integrated_memory.md` です。`/doppel mip time HH:mm` でMinecraft時刻による統合タイミングを設定できます（初期値00:00）。`/doppel mip run` で手動実行できます。NPCは限定的な原木採集、アイテム受け渡し、状況依存の定型会話、関係値に基づく恋愛進展を行えます。約100サーバーtickごとにチェックポイントを試行します。
+
+### 制約と注意
+原木採集はプレイヤーの建築物も壊す可能性があります。**バックアップ済みテストワールドを使用してください。** 完全な経路探索、建築保護、自律建築、LLM会話、高度な恋愛上の自由意思、完全な世界巻き戻しは未実装です。世界の巻き戻しは原則行わず、オプションの `/doppel region on <radius>` のみ限定的なブロック復元を行います。GitHub Actionsのビルド成功はMinecraft実機での動作保証ではありません。
+
+## English Guide / 英語ガイド (Current Behavior)
+
+### Overview
+DNMS is an experimental **Fabric 1.21.1** server mod for Minecraft Java Edition. It records one player's experiences across up to 24 Nao identities, each with separate memories, UUID, goals, lightweight inventory, and relationships. They share one personality profile and an integrated MIP memory index. NPCs currently use armor-stand stand-ins rather than real player entities.
+
+### Installation and training
+Build with Java 21 and Gradle 8.x using `gradle build`; install the generated JAR and Fabric API on a compatible server. As an operator, run `/doppel start` to begin recording and `/doppel next` to advance to the next Nao. Free-play begins after all 24 are recorded. Set automatic training growth time with `/doppel growth time HH:mm` (default 06:00); check progress using `/doppel status`.
+
+### Free-play and playable Nao
+After all 24 identities exist, `/doppel day next` advances to the next Minecraft day at 06:00 without resetting NPC brains, positions, relationships, or world changes. `/doppel control select <1..24>` routes the existing player avatar to a selected Nao and pauses only that stand-in's autonomous movement. `/doppel control release` releases control. `/doppel select <1..24>` only teleports to a stand-in's position. Full entity possession and inventory swapping are not implemented.
+
+### Unattended restart and later player join
+Enable `/doppel life on` and `/doppel offline on`, then save the completed 24-Nao free-play with `/doppel save`. On server restart, the mod attempts to restore the NPC session without waiting for the owner to log in, using the saved checkpoint, owner identity, player snapshot, and dimension. NPC simulation advances while the server runs; it does **not** fast-forward through server downtime. A returning owner joins the already-running world without resetting NPC progress and can select a playable Nao. **Unattended restart and extended runtime behavior have not been validated in Minecraft.**
+
+### Memory, AI, and persistence
+Individual journals live at `config/doppelganger/memories/nao_01.md` through `nao_24.md`; `nao_personality.md` is shared, and `nao_integrated_memory.md` is the derived MIP index. Configure MIP with `/doppel mip time HH:mm` (default 00:00 Minecraft time), or run it manually with `/doppel mip run`. Limited NPC features include nearby exposed-log harvesting, item transfers, contextual template dialogue, and relationship-threshold romance. Checkpoints are attempted approximately every 100 server ticks.
+
+### Limitations and safety
+NPC log harvesting may destroy logs in player-built structures: **use backed-up test worlds**. Full pathfinding, building protection, autonomous construction, open-ended LLM dialogue, sophisticated romantic autonomy, and full-world rewind are not implemented. `/doppel region on <radius>` offers only an optional bounded block-state restore. A successful CI build does not establish in-game correctness.
+
+<!-- DNMS_BILINGUAL_GUIDE_END -->
+
+
 ## 無人再起動復元とプレイアブル奈央の途中合流（2026-11-21）
 
 24人の訓練を完了したフリープレイで `/doppel life on` と `/doppel offline on` を有効にし、セッションをチェックポイント保存しておくと、サーバー再起動後はオーナーのログインを待たずに、保存済みのディメンション・24人の個別記憶・位置・関係性・AI状態を復元し、NPCシミュレーションを再開します。復元には `session-owner.txt`、最新の正常な世代チェックポイントと保存済み `player.json` が必要です。失敗時は1200サーバーtick間隔で再試行します。
