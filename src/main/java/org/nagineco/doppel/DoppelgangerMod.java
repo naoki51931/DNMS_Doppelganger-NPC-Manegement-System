@@ -83,7 +83,7 @@ public class DoppelgangerMod implements ModInitializer {
 
     // Server-only interactive chat dashboard: no client mod or web server required.
     private static final int DEFAULT_NAOS = 24;
-    private static int configuredMaxNaos = 24;
+    private static int configuredMaxNaos = 256;
     private static Path maxNaosFile() {
         return FabricLoader.getInstance().getConfigDir().resolve("doppelganger/max-naos.txt");
     }
@@ -106,7 +106,7 @@ public class DoppelgangerMod implements ModInitializer {
             .append(dashboardButton("状態 / Status", "/doppel dashboard"))
             .append(dashboardButton("生活 / Life", "/doppel life status"))
             .append(dashboardButton("記憶 / MIP", "/doppel mip status")), false);
-        src.sendFeedback(() -> Text.literal("設定 / Configuration: /doppel dashboard max <1..24> (restart-safe)")
+        src.sendFeedback(() -> Text.literal("設定 / Configuration: /doppel dashboard max <1..256> (restart-safe)")
             .formatted(Formatting.GRAY), false);
         if (life != null) for (int i = 0; i < life.count(); i++) {
             final NaoLifeStore.Nao n = life.get(i);
@@ -124,7 +124,7 @@ public class DoppelgangerMod implements ModInitializer {
         try {
             writeAtomic(maxNaosFile(), Integer.toString(maximum));
             configuredMaxNaos = maximum;
-            return say(src, "Maximum Nao identities set to " + maximum + ". Default is 24.");
+            return say(src, "Maximum Nao identities set to " + maximum + ". Default bootstrap is 24.");
         } catch (IOException ex) { return say(src, "Could not save maximum: " + ex.getMessage()); }
     }
     private static int bootstrapNaos(ServerCommandSource src) {
@@ -137,8 +137,8 @@ public class DoppelgangerMod implements ModInitializer {
         try {
             memories = new PersonalityMemoryStore(FabricLoader.getInstance().getGameDir()
                 .resolve("config/doppelganger/memories"));
-            initializeLife(configuredMaxNaos);
-            for (int i = 0; i < configuredMaxNaos; i++) {
+            initializeLife(DEFAULT_NAOS);
+            for (int i = 0; i < DEFAULT_NAOS; i++) {
                 tracks.add(new ArrayList<>(List.of(player.getPos())));
                 HabitBrain brain = new HabitBrain();
                 memories.restore(i, brain);
@@ -259,6 +259,12 @@ public class DoppelgangerMod implements ModInitializer {
     }
     private static Path sessionOwnerFile() {
         return FabricLoader.getInstance().getConfigDir().resolve("doppelganger/session-owner.txt");
+    }
+    private static String integrateAndReplicate() throws IOException {
+        memories.flush();
+        String result = MemoryIntegrationPatch.integrate(memories.directory());
+        memories.replicateAll(life == null ? tracks.size() : life.count());
+        return result + "; full attributed copies replicated";
     }
     private static Path mipCompletedFile() {
         return FabricLoader.getInstance().getConfigDir().resolve("doppelganger/mip-completed.txt");
@@ -739,7 +745,7 @@ public class DoppelgangerMod implements ModInitializer {
                 loadedBrains.add(brain);
             }
             if (player == null) {
-                if (!snapshot.freePlay || loadedTracks.size() != CHARACTERS || playerState == null)
+                if (!snapshot.freePlay || loadedTracks.size() < CHARACTERS || playerState == null)
                     throw new IOException("Unattended restoration requires completed 24-Nao free-play and saved owner dimension");
                 Identifier dimension = Identifier.tryParse(playerState.dimension);
                 if (dimension == null || server.getWorld(RegistryKey.of(RegistryKeys.WORLD, dimension)) == null)
@@ -946,7 +952,7 @@ public class DoppelgangerMod implements ModInitializer {
             + formatMinecraftClock(mipScheduleTick) + ". Use /doppel mip status|on|off|run|logs|time.");
         try { configuredMaxNaos = Files.isRegularFile(maxNaosFile())
             ? Integer.parseInt(Files.readString(maxNaosFile(), StandardCharsets.UTF_8).trim()) : DEFAULT_NAOS;
-            if (configuredMaxNaos < 1 || configuredMaxNaos > 24) configuredMaxNaos = DEFAULT_NAOS;
+            if (configuredMaxNaos < 1 || configuredMaxNaos > 256) configuredMaxNaos = DEFAULT_NAOS;
         } catch (IOException | NumberFormatException ex) { configuredMaxNaos = DEFAULT_NAOS; }
         CommandRegistrationCallback.EVENT.register((dispatcher, registry, environment) ->
             dispatcher.register(literal("doppel")
@@ -954,7 +960,7 @@ public class DoppelgangerMod implements ModInitializer {
                 .then(literal("dashboard")
                     .executes(c -> dashboard(c.getSource()))
                     .then(literal("bootstrap").executes(c -> bootstrapNaos(c.getSource())))
-                    .then(literal("add").then(argument("count", IntegerArgumentType.integer(1, 24))
+                    .then(literal("add").then(argument("count", IntegerArgumentType.integer(1, 256))
                         .executes(c -> addNaos(c.getSource(), IntegerArgumentType.getInteger(c, "count")))))
                     .then(literal("max").then(argument("count", IntegerArgumentType.integer(1, 24))
                         .executes(c -> setMaxNaos(c.getSource(), IntegerArgumentType.getInteger(c, "count")))))
@@ -1490,7 +1496,7 @@ public class DoppelgangerMod implements ModInitializer {
         try {
             memories.flush();
             logMIP("Scheduled " + formatMinecraftClock(mipScheduleTick) + " (day " + day + "): "
-                + MemoryIntegrationPatch.integrate(memories.directory()));
+                + integrateAndReplicate());
             if (sharedKnowledge != null) sharedKnowledge.refresh();
             writeAtomic(mipCompletedFile(), Integer.toString(integrationKey));
             lastIntegratedTrainingDay = integrationKey;
