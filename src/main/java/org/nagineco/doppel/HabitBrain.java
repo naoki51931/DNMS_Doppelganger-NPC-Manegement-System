@@ -26,6 +26,12 @@ public final class HabitBrain {
     public Emotion emotion() { return emotion; }
     public Reason reason() { return reason; }
 
+    /** Reset movement continuity after AI control or teleport, without resetting learned counts. */
+    public void resetObservationAnchor(Vec3d position) {
+        observations.clear();
+        observations.add(position);
+    }
+
     public void observe(Vec3d position) {
         observations.add(position);
         if (observations.size() < 2) return;
