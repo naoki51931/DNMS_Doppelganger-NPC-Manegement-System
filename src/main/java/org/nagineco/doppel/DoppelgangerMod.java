@@ -162,12 +162,43 @@ public class DoppelgangerMod implements ModInitializer {
             UUID b = UUID.fromString(life.get(partner).id);
             var beforeA = engine.get(a, b);
             var beforeB = engine.get(b, a);
-            String[] topics = {
-                "今日は何を見つけた？", "この辺りを一緒に歩いてみよう。",
-                "最近、何を作りたい？", "少し休んで、また探検しよう。",
-                "手伝えることがあったら教えて。"
+            NaoLifeStore.Nao speaker = life.get(i);
+            NaoLifeStore.Nao listener = life.get(partner);
+            String[] openings = {"そういえば、", "ねえ、", "ちょっと聞いて。", "この前のことだけど、"};
+            String opening = openings[Math.floorMod(i * 7 + partner + day, openings.length)];
+            String topic = switch (speaker.goal) {
+                case COLLECT -> "集めたものが " + speaker.inventory.size()
+                    + " 種類あるんだ。必要なものはある？";
+                case BUILD -> "次は何を作ろうか。手伝ってくれる？";
+                case EXPLORE -> "ここは " + ghosts.get(i).getBlockPos().toShortString()
+                    + " だね。近くで面白い場所を探そう。";
+                case REST -> "今日は少し疲れたよ。休みながら話そう。";
+                case SAFETY -> "危険な場所には気をつけよう。";
+                case SOCIAL -> "最近どうしてる？一緒に何かしたいな。";
             };
-            String line = topics[Math.floorMod(day + i + partner + loopTick / 400, topics.length)];
+            String recalled = "";
+            if (sharedKnowledge != null) {
+                var memory = sharedKnowledge.nearest(speaker.goal, ghosts.get(i).getPos(), 16);
+                if (memory.isPresent()) {
+                    var e = memory.get();
+                    recalled = " 奈央" + e.nao() + "が以前この辺りで"
+                        + e.reason().name().toLowerCase(java.util.Locale.ROOT)
+                        + "していた記録も覚えているよ。";
+                }
+            }
+            String relationship = beforeA.trust() >= 70
+                ? "あなたとなら安心して話せる。" : beforeA.familiarity() <= 4
+                ? "まだお互いのことをよく知らないけど、" : "";
+            String response = switch (listener.goal) {
+                case COLLECT -> "まず材料を探してみよう。";
+                case BUILD -> "一緒に形にしてみたい。";
+                case EXPLORE -> "面白そう、行ってみよう。";
+                case REST -> "少し休んでからね。";
+                case SAFETY -> "安全を確かめてからにしよう。";
+                case SOCIAL -> "うん、もっと話そう。";
+            };
+            String line = opening + relationship + topic + recalled;
+            String reply = "奈央" + (partner + 1) + ": " + response;
             engine.apply(a, b, org.nagineco.doppel.social.NaoRelationshipEngine.Interaction.TALK);
             engine.apply(b, a, org.nagineco.doppel.social.NaoRelationshipEngine.Interaction.TALK);
             life.learn(i, NaoLifeStore.Goal.SOCIAL);
@@ -177,8 +208,9 @@ public class DoppelgangerMod implements ModInitializer {
             memories.rememberEvent(i, day, loopTick, "npc_dialogue",
                 "to=Nao" + (partner + 1) + " text=" + line);
             memories.rememberEvent(partner, day, loopTick, "npc_dialogue",
-                "from=Nao" + (i + 1) + " text=" + line);
+                "from=Nao" + (i + 1) + " text=" + line + " reply=" + response);
             report("Nao " + (i + 1) + " -> Nao " + (partner + 1) + ": " + line);
+            report(reply);
             // Romance is mutual and gradual. Neither participant can unilaterally
             // force a relationship; each independently opts in after familiarity.
             if (beforeA.familiarity() >= 12 && beforeA.trust() >= 50
@@ -948,7 +980,7 @@ public class DoppelgangerMod implements ModInitializer {
         }
         autonomousSocialTick();
         long serverTick = server.getTicks();
-        if (serverTick - lastCheckpointTick >= 1200 || lastCheckpointTick == Long.MIN_VALUE) {
+        if (serverTick - lastCheckpointTick >= 100 || lastCheckpointTick == Long.MIN_VALUE) {
             try { saveSession(); lastCheckpointTick = serverTick; }
             catch (IOException ex) {
                 lastCheckpointTick = serverTick; // Retry at the next interval, not every tick.
