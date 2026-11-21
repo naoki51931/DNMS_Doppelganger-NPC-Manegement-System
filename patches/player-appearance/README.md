@@ -1,5 +1,9 @@
 # Player Appearance Patch (PAP) — phase 1
 
+## Phase 4 vanilla visual preview (2026-11-21)
+
+`spawnGhosts()` now equips each existing armor-stand stand-in with a generic player-head item, leather chestplate, leggings and boots, and enables visible arms. This gives a basic human-like **mannequin preview** with no client mod. The saved `skinKey` is not yet applied to the head or to a player skin. This does not meet the requirement for 24 genuine player-shaped NPCs. Minecraft/Fabric build and runtime have not been verified.
+
 ## Phase 3 commands (2026-11-21)
 
 During an initialized session, operators can inspect a logical Nao's appearance metadata with `/doppel appearance status <slot>`. The playable Nao owner can change the persisted skin key with `/doppel appearance set <slot> <skinKey>`. Valid slots are 1–24 but must already exist in `NaoLifeStore`. A save failure restores the prior in-memory key. These commands **do not change the visible armor stand or download a skin**.
