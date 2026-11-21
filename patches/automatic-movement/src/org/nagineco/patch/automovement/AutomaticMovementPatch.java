@@ -13,10 +13,10 @@ public final class AutomaticMovementPatch {
     private AutomaticMovementPatch() {}
 
     public static HabitBrain.Move choose(List<HabitBrain> brains, int playableIndex,
-                                         int dayTick, PersonalityMemoryStore personality) {
+                                         int dayTick, PersonalityMemoryStore personality, boolean rewardEnabled) {
         if (personality == null || brains.isEmpty()) return HabitBrain.Move.STAY;
         return HabitBrain.sharedDecision(brains,
-            Math.max(0, Math.min(playableIndex, brains.size() - 1)), dayTick, personality);
+            Math.max(0, Math.min(playableIndex, brains.size() - 1)), dayTick, personality, rewardEnabled);
     }
 
     /** Apply only horizontal motion; retain vertical physics and avoid solid destination blocks. */
