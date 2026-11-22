@@ -210,7 +210,7 @@ public class DoppelgangerMod implements ModInitializer {
     private static int relationshipRole(ServerCommandSource src, int from, int to, String role) {
         if (!isOwner(src) || life == null || from > life.count() || to > life.count() || from == to)
             return say(src, "Two distinct existing Naos and owner required.");
-        if (!List.of("FRIEND", "FAMILY", "COLLEAGUE", "PARTNER", "SPOUSE", "PARENT", "CHILD").contains(role))
+        if (!org.nagineco.doppel.core.SocialRules.validNaoRelationship(role))
             return say(src, "Invalid relationship role.");
         life.get(from - 1).personalRelationships.put(life.get(to - 1).id, role);
         try { life.save(); return say(src, "Nao " + from + " -> " + to + ": " + role); }
@@ -516,14 +516,14 @@ public class DoppelgangerMod implements ModInitializer {
     }
     private static int personAdd(ServerCommandSource src, String id) {
         if (!isOwner(src) || people == null) return say(src, "Owner and initialized session required.");
-        if (!id.matches("[A-Za-z0-9_-]{1,48}")) return say(src, "Invalid person ID.");
+        if (!org.nagineco.doppel.core.SocialRules.validExternalPersonId(id)) return say(src, "Invalid person ID.");
         people.add(id, id, "EXTERNAL");
         try { people.save(); return say(src, "Registered external person: " + id); }
         catch (IOException ex) { return say(src, "Registry save failed: " + ex.getMessage()); }
     }
     private static int personRelate(ServerCommandSource src, String first, String second, String role) {
         if (!isOwner(src) || people == null) return say(src, "Owner and initialized session required.");
-        if (!List.of("FRIEND","FAMILY","COLLEAGUE","PARTNER","SPOUSE","PARENT","CHILD","HOUSEMATE").contains(role))
+        if (!org.nagineco.doppel.core.SocialRules.validPersonRelationship(role))
             return say(src, "Invalid role.");
         try {
             people.relate(personId(first), personId(second), role);
