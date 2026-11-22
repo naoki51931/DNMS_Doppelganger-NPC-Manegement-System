@@ -1,0 +1,84 @@
+name: Minecraft Fabric server smoke test
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/main/**'
+      - 'build.gradle'
+      - 'src/main/resources/fabric.mod.json'
+      - '.github/workflows/minecraft-server-smoke.yml'
+
+jobs:
+  fabric-server:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+      - name: Build DNMS mod
+        run: gradle --no-daemon --stacktrace remapJar
+      - name: Install official Fabric 1.21.1 dedicated server
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p server/mods
+          cd server
+          curl --fail --location --retry 3 --silent --show-error \
+            -o fabric-installer.jar \
+            https://maven.fabricmc.net/net/fabricmc/fabric-installer/1.0.1/fabric-installer-1.0.1.jar
+          java -jar fabric-installer.jar server -mcversion 1.21.1 -loader 0.16.10 -downloadMinecraft
+          printf 'eula=true\n' > eula.txt
+          printf 'server-port=25575\nonline-mode=true\nview-distance=3\nsimulation-distance=3\nmax-players=1\n' > server.properties
+          curl --fail --location --retry 3 --silent --show-error \
+            -o mods/fabric-api.jar \
+            'https://maven.fabricmc.net/net/fabricmc/fabric-api/fabric-api/0.110.0+1.21.1/fabric-api-0.110.0+1.21.1.jar'
+          find ../build/libs -maxdepth 1 -name '*.jar' ! -name '*sources*' ! -name '*dev*' -exec cp {} mods/ \;
+          test -n "$(find mods -maxdepth 1 -name 'doppelganger-npc-system-*.jar' -print -quit)"
+      - name: Boot Minecraft and verify mod initialization
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd server
+          java -Xms512M -Xmx2G -jar fabric-server-launch.jar nogui > minecraft.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in $(seq 1 150); do
+            if grep -Eq 'Done \([0-9.]+s\)!' minecraft.log; then
+              ready=1
+              break
+            fi
+            if ! kill -0 "$pid" 2>/dev/null; then
+              echo 'Minecraft server exited before startup completed'
+              tail -150 minecraft.log
+              exit 1
+            fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            echo 'Minecraft server startup timed out'
+            tail -150 minecraft.log
+            exit 1
+          fi
+          grep -Eq 'Loading [0-9]+ mods' minecraft.log
+          grep -Eiq 'doppelganger|DoppelgangerMod|doppel npc' minecraft.log || {
+            echo 'No DNMS evidence in server log'
+            tail -150 minecraft.log
+            exit 1
+          }
+          echo 'Minecraft 1.21.1 Fabric server started and DNMS was present in logs'
+      - name: Upload server logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: minecraft-server-smoke-logs
+          path: server/minecraft.log
+          if-no-files-found: ignore
