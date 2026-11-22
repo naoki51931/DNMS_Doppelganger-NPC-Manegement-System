@@ -14,21 +14,19 @@ public final class HabitBrain {
     public enum Emotion { NEUTRAL, HAPPY, CURIOUS, AFRAID, ANGRY, SAD }
     public enum Reason { NONE, EXPLORE, BUILD, COLLECT, SAFETY, SOCIAL }
 
-    private final int[][][][] counts =
-        new int[2][Emotion.values().length][Reason.values().length][Move.values().length];
+    private final org.nagineco.doppel.core.NpcLearningState learning =
+        new org.nagineco.doppel.core.NpcLearningState(
+            Emotion.values().length, Reason.values().length, Move.values().length);
     private final List<Vec3d> observations = new ArrayList<>();
     private Emotion emotion = Emotion.NEUTRAL;
     private Reason reason = Reason.NONE;
-    private int samples = 0;
-    private final double[][][][] rewards =
-        new double[2][Emotion.values().length][Reason.values().length][Move.values().length];
     private Move lastManualMove = null;
     private Emotion lastManualEmotion = Emotion.NEUTRAL;
     private Reason lastManualReason = Reason.NONE;
     private int lastManualDayPart = 0;
 
-    public void setEmotion(Emotion value) { emotion = value; }
-    public void setReason(Reason value) { reason = value; }
+    public void setEmotion(Emotion value) { emotion = java.util.Objects.requireNonNull(value); learning.setEmotion(value.ordinal()); }
+    public void setReason(Reason value) { reason = java.util.Objects.requireNonNull(value); learning.setMotivation(value.ordinal()); }
     public Emotion emotion() { return emotion; }
     public Reason reason() { return reason; }
 
@@ -45,8 +43,7 @@ public final class HabitBrain {
         Vec3d previous = observations.get(observations.size() - 2);
         Move move = classify(position.subtract(previous));
         int dayPart = ((observations.size() - 1) % 24000) >= 12000 ? 1 : 0;
-        counts[dayPart][emotion.ordinal()][reason.ordinal()][move.ordinal()]++;
-        samples++;
+        learning.observe(dayPart, emotion.ordinal(), reason.ordinal(), move.ordinal());
         lastManualMove = move;
         lastManualEmotion = emotion;
         lastManualReason = reason;
@@ -60,7 +57,7 @@ public final class HabitBrain {
     }
 
     public void learnReward(Move move, Emotion e, Reason r, int part, double value) {
-        if (Double.isFinite(value)) rewards[part][e.ordinal()][r.ordinal()][move.ordinal()] += org.nagineco.doppel.core.LearnedActionPolicy.clippedReward(value);
+        learning.reward(part, e.ordinal(), r.ordinal(), move.ordinal(), value);
     }
 
     public Move lastManualMove() { return lastManualMove; }
@@ -75,30 +72,9 @@ public final class HabitBrain {
         return z > 0 ? Move.SOUTH : Move.NORTH;
     }
 
-    private int[] distribution(int dayPart, Emotion e, Reason r) {
-        return counts[dayPart][e.ordinal()][r.ordinal()];
-    }
-
-    private static int sum(int[] values) {
-        int n = 0;
-        for (int v : values) n += v;
-        return n;
-    }
-
     /** Exact emotional context first, then a fallback across known contexts. */
     public Move decide(int dayTick) {
-        int part = dayTick >= 12000 ? 1 : 0;
-        int[] values = distribution(part, emotion, reason);
-        if (sum(values) == 0) {
-            int[] fallback = new int[Move.values().length];
-            for (Emotion e : Emotion.values())
-                for (Reason r : Reason.values())
-                    for (int i = 0; i < fallback.length; i++)
-                        fallback[i] += counts[part][e.ordinal()][r.ordinal()][i];
-            values = fallback;
-        }
-        if (sum(values) == 0) return Move.STAY;
-        return Move.values()[org.nagineco.doppel.core.LearnedActionPolicy.dominant(values)];
+        return Move.values()[learning.decide(dayTick >= 12000 ? 1 : 0)];
     }
 
     /**
@@ -119,18 +95,10 @@ public final class HabitBrain {
         double[] scores = new double[Move.values().length];
         for (int j = 0; j < all.size(); j++) {
             HabitBrain brain = all.get(j);
-            double individualBoost = 1.0; // All 24 Nao experiences have equal weight.
-            for (Reason reason : Reason.values()) {
-                // A preference of 0 suppresses the action evidence for this reason.
-                for (Emotion emotion : Emotion.values()) {
-                    int[] observed = brain.counts[part][emotion.ordinal()][reason.ordinal()];
-                    for (int m = 0; m < scores.length; m++) {
-                        scores[m] += org.nagineco.doppel.core.LearnedActionPolicy.weightedEvidence(
-                            observed[m], brain.rewards[part][emotion.ordinal()][reason.ordinal()][m],
-                            personality.preference(reason), rewardEnabled) * individualBoost;
-                    }
-                }
-            }
+            double[] preferences = new double[Reason.values().length];
+            for (Reason reason : Reason.values())
+                preferences[reason.ordinal()] = personality.preference(reason);
+            brain.learning.accumulateScores(part, preferences, rewardEnabled, scores);
         }
         return Move.values()[org.nagineco.doppel.core.LearnedActionPolicy.dominantPositive(scores)];
     }
@@ -147,8 +115,7 @@ public final class HabitBrain {
     }
 
     public void learnMemory(Move move, Emotion e, Reason r, int tick) {
-        counts[tick >= 12000 ? 1 : 0][e.ordinal()][r.ordinal()][move.ordinal()]++;
-        samples++;
+        learning.observe(tick >= 12000 ? 1 : 0, e.ordinal(), r.ordinal(), move.ordinal());
     }
 
     public Move latestMove() {
@@ -168,5 +135,5 @@ public final class HabitBrain {
         };
     }
 
-    public int samples() { return samples; }
+    public int samples() { return learning.samples(); }
 }
