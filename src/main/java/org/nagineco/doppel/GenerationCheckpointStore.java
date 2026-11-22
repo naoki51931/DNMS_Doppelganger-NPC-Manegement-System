@@ -18,7 +18,10 @@ public final class GenerationCheckpointStore {
         names.add("nao_personality.md");
         names.add("shared_memory_index.properties");
         names.add("shared_memory_keywords.tsv");
-        for (int i = 1; i <= 256; i++) names.add(String.format(java.util.Locale.ROOT, "nao_%02d.md", i));
+        for (int i = 1; i <= 256; i++) {
+            names.add(String.format(java.util.Locale.ROOT, "nao_%02d.md", i));
+            names.add(String.format(java.util.Locale.ROOT, "nao_%02d.learning.bin", i));
+        }
         return names.toArray(new String[0]);
     }
     public static Path latest(Path root) throws IOException {
