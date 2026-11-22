@@ -53,4 +53,42 @@ public final class NaoWorkPatch {
         nao.lastOutcome = "COLLECTED " + key + " at " + pos.toShortString();
         return true;
     }
+
+    /**
+     * Conservative construction: place one previously harvested log on a nearby
+     * solid surface. Never overwrite an occupied block or create free materials.
+     */
+    public static boolean build(ServerWorld world, Vec3d origin, NaoLifeStore.Nao nao) {
+        if (nao.inventory == null || nao.inventory.isEmpty() || nao.energy < 20) return false;
+        java.util.List<String> keys = new java.util.ArrayList<>(nao.inventory.keySet());
+        java.util.Collections.sort(keys);
+        for (String key : keys) {
+            if (nao.inventory.getOrDefault(key, 0) <= 0) continue;
+            net.minecraft.util.Identifier id = net.minecraft.util.Identifier.tryParse(key);
+            if (id == null || !Registries.BLOCK.containsId(id)) continue;
+            net.minecraft.block.Block block = Registries.BLOCK.get(id);
+            if (!allowed(block.getDefaultState())) continue;
+            BlockPos center = BlockPos.ofFloored(origin);
+            for (int dx = -2; dx <= 2; dx++)
+                for (int dz = -2; dz <= 2; dz++) {
+                    BlockPos target = center.add(dx, 0, dz);
+                    BlockPos support = target.down();
+                    if (!world.isChunkLoaded(target) || !world.isChunkLoaded(support)) continue;
+                    if (!world.getBlockState(target).isAir()) continue;
+                    if (!world.getBlockState(support).isSolidBlock(world, support)) continue;
+                    if (Vec3d.ofCenter(target).squaredDistanceTo(origin) > 16) continue;
+                    // Avoid building into the NPC's own occupied block.
+                    if (target.equals(center)) continue;
+                    if (!world.getOtherEntities(null, new net.minecraft.util.math.Box(target)).isEmpty()) continue;
+                    if (!world.setBlockState(target, block.getDefaultState(), 3)) continue;
+                    nao.inventory.compute(key, (k, count) -> count == null || count <= 1 ? null : count - 1);
+                    nao.building++;
+                    nao.energy = Math.max(0, nao.energy - 2);
+                    nao.lastAction = "BUILD";
+                    nao.lastOutcome = "BUILT " + key + " at " + target.toShortString();
+                    return true;
+                }
+        }
+        return false;
+    }
 }
