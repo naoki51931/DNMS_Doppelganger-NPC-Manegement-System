@@ -1148,6 +1148,33 @@ public class DoppelgangerMod implements ModInitializer {
             ? Integer.parseInt(Files.readString(maxNaosFile(), StandardCharsets.UTF_8).trim()) : 256;
             if (configuredMaxNaos < 1 || configuredMaxNaos > 256) configuredMaxNaos = DEFAULT_NAOS;
         } catch (IOException | NumberFormatException ex) { configuredMaxNaos = DEFAULT_NAOS; }
+        // Dedicated CI smoke command: opt-in, console-only, never enabled in normal play.
+        if (Boolean.getBoolean("dnms.ci.smoke")) {
+            CommandRegistrationCallback.EVENT.register((dispatcher, registry, environment) ->
+                dispatcher.register(literal("dnms_ci_spawn")
+                    .requires(source -> source.hasPermissionLevel(4)
+                        && source.getEntity() == null)
+                    .executes(context -> {
+                        MinecraftServer server = context.getSource().getServer();
+                        ServerWorld testWorld = server.getOverworld();
+                        BlockPos origin = testWorld.getSpawnPos();
+                        int spawned = 0;
+                        for (int slot = 0; slot < 24; slot++) {
+                            ArmorStandEntity stand = new ArmorStandEntity(EntityType.ARMOR_STAND, testWorld);
+                            stand.refreshPositionAndAngles(origin.getX() + 0.5 + slot % 6,
+                                origin.getY() + 2, origin.getZ() + 0.5 + slot / 6, 0, 0);
+                            stand.setNoGravity(true);
+                            stand.setCustomName(Text.literal("DNMS CI Nao " + (slot + 1)));
+                            if (testWorld.spawnEntity(stand)) spawned++;
+                        }
+                        if (spawned != 24) {
+                            LOG.severe("DNMS_CI_SPAWN_FAILED count=" + spawned);
+                            return 0;
+                        }
+                        LOG.info("DNMS_CI_SPAWN_OK count=24");
+                        return 1;
+                    })));
+        }
         CommandRegistrationCallback.EVENT.register((dispatcher, registry, environment) ->
             dispatcher.register(literal("doppel")
                 .requires(s -> s.hasPermissionLevel(2))
