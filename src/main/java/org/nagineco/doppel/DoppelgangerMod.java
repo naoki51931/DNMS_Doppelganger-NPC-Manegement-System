@@ -91,7 +91,7 @@ public class DoppelgangerMod implements ModInitializer {
                                              org.nagineco.doppel.core.PhysicalSkillSync.Mode mode) {
         try {
             Files.createDirectories(physicalSkillModeFile().getParent());
-            org.nagineco.doppel.core.AtomicTextFile.write(physicalSkillModeFile(), mode.name() + "\\n");
+            org.nagineco.doppel.core.AtomicTextFile.write(physicalSkillModeFile(), mode.name() + "\n");
             physicalSkillMode = mode;
             return say(src, "Physical skill sync policy: " + mode
                 + " (policy configured; skill simulation integration pending)");
