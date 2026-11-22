@@ -1475,6 +1475,27 @@ public class DoppelgangerMod implements ModInitializer {
                         "npc_collect", nao.lastOutcome);
                     }
                 }
+                if (nao.goal == NaoLifeStore.Goal.BUILD && loopTick % 100 == 0
+                        && nao.energy >= 20) {
+                    var buildSkill = physicalSkills != null && i < physicalSkills.count()
+                        ? physicalSkills.state(i) : null;
+                    long buildAttempt = nao.actionAttempts == null ? 0L
+                        : nao.actionAttempts.getOrDefault("BUILD", 0);
+                    boolean skillReady = org.nagineco.doppel.core.PhysicalBuildPerformance
+                        .canBuild(buildSkill, i, buildAttempt);
+                    boolean built = skillReady && NaoWorkPatch.build(world, previous, nao);
+                    life.observeAction(i, NaoActionLearning.Action.BUILD, built);
+                    if (built) {
+                        if (physicalSkills != null && i < physicalSkills.count()) {
+                            physicalSkills.configure(physicalSkillMode, 1);
+                            physicalSkills.practice(i, 1, 1, 0.25);
+                        }
+                        if (rewardLearning) NaoRlpPatch.record(nao, NaoLifeStore.Goal.BUILD, 5);
+                        report("Nao " + nao.number + " " + nao.lastOutcome);
+                        if (memories != null) memories.rememberEvent(i, day, loopTick,
+                            "npc_build", nao.lastOutcome);
+                    }
+                }
                 HabitBrain.Move move = NaoLifeAI.move(nao, brains, i, loopTick,
                     memories, rewardLearning, sharedKnowledge, previous);
                 Vec3d baseProposed = org.nagineco.doppel.minecraft.MinecraftActionExecutor.proposedPosition(
