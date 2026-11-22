@@ -125,14 +125,14 @@ public class DoppelgangerMod implements ModInitializer {
             physicalSkillMode = mode;
             if (physicalSkills != null) physicalSkills.configure(mode, 1);
             return say(src, "Physical skill sync policy: " + mode
-                + " (policy configured; skill simulation integration pending)");
+                + " (manual practice enabled; automatic activity tracking pending)");
         } catch (IOException ex) {
             return say(src, "Physical skill mode save failed: " + ex.getMessage());
         }
     }
     private static int physicalSkillModeStatus(ServerCommandSource src) {
         return say(src, "Physical skill sync policy: " + physicalSkillMode
-            + " (skill simulation integration pending)");
+            + " (manual practice enabled; automatic activity tracking pending)");
     }
 
     // Server-only interactive chat dashboard: no client mod or web server required.
