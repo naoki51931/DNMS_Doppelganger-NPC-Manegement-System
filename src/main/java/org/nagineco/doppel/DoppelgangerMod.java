@@ -82,6 +82,28 @@ public class DoppelgangerMod implements ModInitializer {
             + " (requires an initialized or resumed session and /doppel life on).");
     }
 
+    private static org.nagineco.doppel.core.PhysicalSkillSync.Mode physicalSkillMode =
+        org.nagineco.doppel.core.PhysicalSkillSync.Mode.INDIVIDUAL;
+    private static Path physicalSkillModeFile() {
+        return FabricLoader.getInstance().getConfigDir().resolve("doppelganger/physical-skill-mode.txt");
+    }
+    private static int physicalSkillModeSet(ServerCommandSource src,
+                                             org.nagineco.doppel.core.PhysicalSkillSync.Mode mode) {
+        try {
+            Files.createDirectories(physicalSkillModeFile().getParent());
+            org.nagineco.doppel.core.AtomicTextFile.write(physicalSkillModeFile(), mode.name() + "\\n");
+            physicalSkillMode = mode;
+            return say(src, "Physical skill sync policy: " + mode
+                + " (policy configured; skill simulation integration pending)");
+        } catch (IOException ex) {
+            return say(src, "Physical skill mode save failed: " + ex.getMessage());
+        }
+    }
+    private static int physicalSkillModeStatus(ServerCommandSource src) {
+        return say(src, "Physical skill sync policy: " + physicalSkillMode
+            + " (skill simulation integration pending)");
+    }
+
     // Server-only interactive chat dashboard: no client mod or web server required.
     private static final int DEFAULT_NAOS = 24;
     private static int configuredMaxNaos = 256;
@@ -1012,6 +1034,13 @@ public class DoppelgangerMod implements ModInitializer {
             rewardLearning = Files.exists(file) && Files.readString(file, StandardCharsets.UTF_8).trim().equalsIgnoreCase("on");
         } catch (IOException ex) { rewardLearning = false; }
         try {
+            if (Files.isRegularFile(physicalSkillModeFile()))
+                physicalSkillMode = org.nagineco.doppel.core.PhysicalSkillSync.Mode.parse(
+                    Files.readString(physicalSkillModeFile(), StandardCharsets.UTF_8));
+        } catch (IOException | IllegalArgumentException ex) {
+            physicalSkillMode = org.nagineco.doppel.core.PhysicalSkillSync.Mode.INDIVIDUAL;
+        }
+        try {
             offlineNpcMode = Files.isRegularFile(offlineNpcModeFile())
                 && Files.readString(offlineNpcModeFile(), StandardCharsets.UTF_8).trim().equalsIgnoreCase("on");
         } catch (IOException ex) { offlineNpcMode = false; }
@@ -1070,6 +1099,14 @@ public class DoppelgangerMod implements ModInitializer {
                 .then(literal("save").executes(c -> saveCommand(c.getSource())))
                 .then(literal("day").then(literal("next")
                     .executes(c -> advanceFreePlayDay(c.getSource()))))
+                .then(literal("physicalskill")
+                    .then(literal("individual").executes(c -> physicalSkillModeSet(c.getSource(),
+                        org.nagineco.doppel.core.PhysicalSkillSync.Mode.INDIVIDUAL)))
+                    .then(literal("technique").executes(c -> physicalSkillModeSet(c.getSource(),
+                        org.nagineco.doppel.core.PhysicalSkillSync.Mode.TECHNIQUE)))
+                    .then(literal("full").executes(c -> physicalSkillModeSet(c.getSource(),
+                        org.nagineco.doppel.core.PhysicalSkillSync.Mode.FULL)))
+                    .then(literal("status").executes(c -> physicalSkillModeStatus(c.getSource()))))
                 .then(literal("offline")
                     .then(literal("on").executes(c -> offlineNpcModeSet(c.getSource(), true)))
                     .then(literal("off").executes(c -> offlineNpcModeSet(c.getSource(), false)))
