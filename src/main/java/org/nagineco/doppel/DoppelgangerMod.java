@@ -1330,7 +1330,8 @@ public class DoppelgangerMod implements ModInitializer {
                 }
                 HabitBrain.Move move = NaoLifeAI.move(nao, brains, i, loopTick,
                     memories, rewardLearning, sharedKnowledge, previous);
-                Vec3d proposed = HabitBrain.applyMove(previous, move);
+                Vec3d proposed = org.nagineco.doppel.minecraft.MinecraftActionExecutor.proposedPosition(
+                    previous, org.nagineco.doppel.minecraft.MinecraftActionExecutor.fromLegacyMove(move));
                 Vec3d anchor = samples.get(0);
                 // Minecraft adapter supplies collision and danger; core owns the policy.
                 boolean withinAnchor = org.nagineco.doppel.core.MovementPolicy.withinAnchor(
