@@ -58,6 +58,10 @@ public class DoppelgangerMod implements ModInitializer {
     private static final List<List<Vec3d>> tracks = new ArrayList<>();
     private static final List<ArmorStandEntity> ghosts = new ArrayList<>();
     private static final List<HabitBrain> brains = new ArrayList<>();
+    /** Ephemeral navigation cache; never part of saved NPC memory/checkpoints. */
+    private record RouteWaypoint(String phase, int x, int z, int floorY) {}
+    private static final RouteWaypoint[] routeWaypoints = new RouteWaypoint[256];
+
     private static boolean aiMode = true;
     private static PersonalityMemoryStore memories;
     private static NaoLifeStore life;
@@ -1549,6 +1553,9 @@ public class DoppelgangerMod implements ModInitializer {
                     memories, rewardLearning, sharedKnowledge, previous);
                 if (nao.constructionActive && ("RETURN".equals(nao.constructionPhase)
                         || "GATHER".equals(nao.constructionPhase))) {
+                    if (org.nagineco.doppel.core.NaoRouteSchedule.shouldRefresh(i, loopTick,
+                            routeWaypoints[i] == null,
+                            routeWaypoints[i] != null && !routeWaypoints[i].phase().equals(nao.constructionPhase))) {
                     var startCell = new org.nagineco.doppel.core.NaoGridPathfinder.Cell(
                         (int)Math.floor(previous.x), (int)Math.floor(previous.z));
                     // In gathering mode, navigate toward the nearest exposed log.
@@ -1594,18 +1601,26 @@ public class DoppelgangerMod implements ModInitializer {
                         }, 16);
                     if (!route.isEmpty()) {
                         var nextCell = route.get(0);
-                        double dx = nextCell.x() + 0.5 - previous.x;
-                        double dz = nextCell.z() + 0.5 - previous.z;
+                        routeWaypoints[i] = new RouteWaypoint(nao.constructionPhase,
+                            nextCell.x(), nextCell.z(), floorY);
+                    } else {
+                        routeWaypoints[i] = null;
+                        nao.lastOutcome = "GATHER".equals(nao.constructionPhase)
+                            ? "GATHER_PATH_BLOCKED_OR_NO_LOG" : "RETURN_PATH_BLOCKED";
+                    }
+                    }
+                    RouteWaypoint waypoint = routeWaypoints[i];
+                    if (waypoint != null) {
+                        double dx = waypoint.x() + 0.5 - previous.x;
+                        double dz = waypoint.z() + 0.5 - previous.z;
                         if (Math.abs(dx) > Math.abs(dz))
                             move = dx > 0 ? HabitBrain.Move.EAST : HabitBrain.Move.WEST;
                         else if (Math.abs(dz) > 0.01)
                             move = dz > 0 ? HabitBrain.Move.SOUTH : HabitBrain.Move.NORTH;
                         else move = HabitBrain.Move.STAY;
-                    } else {
-                        move = HabitBrain.Move.STAY;
-                        nao.lastOutcome = "GATHER".equals(nao.constructionPhase)
-                            ? "GATHER_PATH_BLOCKED_OR_NO_LOG" : "RETURN_PATH_BLOCKED";
-                    }
+                    } else move = HabitBrain.Move.STAY;
+                } else {
+                    routeWaypoints[i] = null;
                 }
                 Vec3d baseProposed = org.nagineco.doppel.minecraft.MinecraftActionExecutor.proposedPosition(
                     previous, org.nagineco.doppel.minecraft.MinecraftActionExecutor.fromLegacyMove(move));
