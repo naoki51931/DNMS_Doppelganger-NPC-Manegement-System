@@ -94,6 +94,31 @@ jobs:
             tail -100 minecraft.log
             exit 1
           fi
+          printf '%s\n' dnms_ci_bootstrap >&3
+          bootstrapped=0
+          for attempt in $(seq 1 40); do
+            if grep -q 'DNMS_CI_REAL_BOOTSTRAP_OK identities=24 ghosts=24' minecraft.log; then
+              bootstrapped=1
+              break
+            fi
+            if grep -q 'DNMS_CI_REAL_BOOTSTRAP_FAILED' minecraft.log; then
+              echo 'Real DNMS bootstrap failed'
+              tail -120 minecraft.log
+              exit 1
+            fi
+            if ! kill -0 "$pid" 2>/dev/null; then
+              echo 'Minecraft server exited during DNMS bootstrap'
+              tail -120 minecraft.log
+              exit 1
+            fi
+            sleep 1
+          done
+          if [ "$bootstrapped" -ne 1 ]; then
+            echo 'Timed out waiting for real DNMS bootstrap'
+            tail -120 minecraft.log
+            exit 1
+          fi
+          echo 'DNMS real identities and NPC stand-ins bootstrapped successfully'
           printf '%s\n' stop >&3
           echo 'Minecraft 1.21.1 Fabric server started and 24 test entities spawned'
 
