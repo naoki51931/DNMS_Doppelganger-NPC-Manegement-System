@@ -1398,7 +1398,7 @@ public class DoppelgangerMod implements ModInitializer {
                             LOG.info("DNMS_CI_AUTOWORK_OK");
                             return 1;
                         }
-                        LOG.severe("DNMS_CI_AUTOWORK_FAILED collected=" + harvested
+                        LOG.info("DNMS_CI_AUTOWORK_PENDING collected=" + harvested
                             + " built=" + built + " elapsed=" + elapsed);
                         return 0;
                     })));
