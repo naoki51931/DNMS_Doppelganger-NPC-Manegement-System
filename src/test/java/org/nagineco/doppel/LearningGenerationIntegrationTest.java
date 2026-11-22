@@ -81,6 +81,20 @@ class LearningGenerationIntegrationTest {
         assertEquals(1, NpcLearningCheckpoint.load(restarted, 255, memories).samples());
     }
 
+    @Test void corruptedSnapshotInvalidatesPublishedGeneration() throws Exception {
+        Path live = temp.resolve("corrupt-live");
+        new PersonalityMemoryStore(live);
+        NpcLearningCheckpoint.save(live, List.of(new HabitBrain()));
+        Path recording = temp.resolve("corrupt-recordings.json");
+        Files.writeString(recording, "{}", StandardCharsets.UTF_8);
+        Path root = temp.resolve("corrupt-generations");
+        GenerationCheckpointStore.publish(root, recording, live, null, null);
+        Path generation = GenerationCheckpointStore.latest(root);
+        Files.write(generation.resolve("memories").resolve(NpcLearningCheckpoint.fileName(0)),
+            new byte[]{0, 1, 2});
+        assertThrows(IOException.class, () -> GenerationCheckpointStore.latest(root));
+    }
+
     @Test void oldGenerationWithoutLearningManifestStillLoads() throws Exception {
         Path live = temp.resolve("legacy");
         new PersonalityMemoryStore(live);
