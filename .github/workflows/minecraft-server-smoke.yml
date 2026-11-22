@@ -47,7 +47,9 @@ jobs:
         run: |
           set -euo pipefail
           cd server
-          java -Xms512M -Xmx2G -jar fabric-server-launch.jar nogui > minecraft.log 2>&1 &
+          mkfifo minecraft-console
+          exec 3<>minecraft-console
+          java -Ddnms.ci.smoke=true -Xms512M -Xmx2G -jar fabric-server-launch.jar nogui < minecraft-console > minecraft.log 2>&1 &
           pid=$!
           trap 'kill "$pid" 2>/dev/null || true' EXIT
           ready=0
@@ -74,7 +76,27 @@ jobs:
             tail -150 minecraft.log
             exit 1
           }
-          echo 'Minecraft 1.21.1 Fabric server started and DNMS was present in logs'
+          printf 'dnms_ci_spawn\\n' >&3
+          spawned=0
+          for attempt in $(seq 1 30); do
+            if grep -q 'DNMS_CI_SPAWN_OK count=24' minecraft.log; then
+              spawned=1
+              break
+            fi
+            if grep -q 'DNMS_CI_SPAWN_FAILED' minecraft.log; then
+              tail -100 minecraft.log
+              exit 1
+            fi
+            sleep 1
+          done
+          if [ "$spawned" -ne 1 ]; then
+            echo 'DNMS CI entity spawn command did not confirm 24 entities'
+            tail -100 minecraft.log
+            exit 1
+          fi
+          printf 'stop\\n' >&3
+          echo 'Minecraft 1.21.1 Fabric server started and 24 test entities spawned'
+
       - name: Upload server logs
         if: always()
         uses: actions/upload-artifact@v4
