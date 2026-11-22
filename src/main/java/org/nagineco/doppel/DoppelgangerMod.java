@@ -804,6 +804,20 @@ public class DoppelgangerMod implements ModInitializer {
                 FabricLoader.getInstance().getGameDir().resolve("config/doppelganger/memories"));
             loadedTracks = RecordingSnapshotStore.restoreTracks(snapshot);
             if (loadedTracks.isEmpty()) { LOG.warning("DNMS checkpoint has no recordings"); return 0; }
+            if (generation != null) {
+                Path learningManifest = generation.resolve("learning_count.txt");
+                if (Files.isRegularFile(learningManifest)) {
+                    int learningCount;
+                    try {
+                        learningCount = Integer.parseInt(Files.readString(learningManifest).trim());
+                    } catch (NumberFormatException ex) {
+                        throw new IOException("Invalid NPC learning checkpoint count", ex);
+                    }
+                    if (learningCount != loadedTracks.size())
+                        throw new IOException("NPC learning checkpoint count " + learningCount
+                            + " differs from recorded NPC count " + loadedTracks.size());
+                }
+            }
             loadedMemories = new PersonalityMemoryStore(
                 FabricLoader.getInstance().getGameDir().resolve("config/doppelganger/memories"));
             for (int i = 0; i < loadedTracks.size(); i++) {
