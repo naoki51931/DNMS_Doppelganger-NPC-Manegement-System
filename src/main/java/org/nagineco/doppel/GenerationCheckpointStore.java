@@ -45,10 +45,14 @@ public final class GenerationCheckpointStore {
             }
             if (expected < 1 || expected > 256)
                 throw new IOException("Invalid learning snapshot count");
-            for (int i = 0; i < expected; i++)
-                if (!Files.isRegularFile(generation.resolve("memories")
-                        .resolve(NpcLearningCheckpoint.fileName(i))))
+            for (int i = 0; i < expected; i++) {
+                Path snapshot = generation.resolve("memories")
+                    .resolve(NpcLearningCheckpoint.fileName(i));
+                if (!Files.isRegularFile(snapshot))
                     throw new IOException("Missing learning snapshot for Nao " + (i + 1));
+                // A present but truncated or corrupt file must not pass recovery validation.
+                org.nagineco.doppel.core.NpcLearningStore.load(snapshot);
+            }
         }
         return generation;
     }
