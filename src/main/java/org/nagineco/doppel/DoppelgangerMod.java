@@ -1548,12 +1548,38 @@ public class DoppelgangerMod implements ModInitializer {
                 HabitBrain.Move move = NaoLifeAI.move(nao, brains, i, loopTick,
                     memories, rewardLearning, sharedKnowledge, previous);
                 if (nao.constructionActive && "RETURN".equals(nao.constructionPhase)) {
-                    double dx = nao.buildAnchorX + 0.5 - previous.x;
-                    double dz = nao.buildAnchorZ + 0.5 - previous.z;
-                    if (Math.abs(dx) > Math.abs(dz))
-                        move = dx > 0 ? HabitBrain.Move.EAST : HabitBrain.Move.WEST;
-                    else if (Math.abs(dz) > 0.01)
-                        move = dz > 0 ? HabitBrain.Move.SOUTH : HabitBrain.Move.NORTH;
+                    var startCell = new org.nagineco.doppel.core.NaoGridPathfinder.Cell(
+                        (int)Math.floor(previous.x), (int)Math.floor(previous.z));
+                    var goalCell = new org.nagineco.doppel.core.NaoGridPathfinder.Cell(
+                        nao.buildAnchorX, nao.buildAnchorZ);
+                    int floorY = (int)Math.floor(previous.y);
+                    Vec3d worldAnchor = samples.get(0);
+                    var route = org.nagineco.doppel.core.NaoGridPathfinder.find(
+                        startCell, goalCell, (x, z) -> {
+                            BlockPos feet = new BlockPos(x, floorY, z);
+                            BlockPos support = feet.down();
+                            return world.isChunkLoaded(feet) && world.isChunkLoaded(support)
+                                && world.isAir(feet)
+                                && world.getFluidState(feet).isEmpty()
+                                && world.getFluidState(support).isEmpty()
+                                && world.getBlockState(support).isSolidBlock(world, support)
+                                && org.nagineco.doppel.core.MovementPolicy.withinAnchor(
+                                    x + 0.5, previous.y, z + 0.5,
+                                    worldAnchor.x, worldAnchor.y, worldAnchor.z);
+                        }, 16);
+                    if (!route.isEmpty()) {
+                        var nextCell = route.get(0);
+                        double dx = nextCell.x() + 0.5 - previous.x;
+                        double dz = nextCell.z() + 0.5 - previous.z;
+                        if (Math.abs(dx) > Math.abs(dz))
+                            move = dx > 0 ? HabitBrain.Move.EAST : HabitBrain.Move.WEST;
+                        else if (Math.abs(dz) > 0.01)
+                            move = dz > 0 ? HabitBrain.Move.SOUTH : HabitBrain.Move.NORTH;
+                        else move = HabitBrain.Move.STAY;
+                    } else {
+                        move = HabitBrain.Move.STAY;
+                        nao.lastOutcome = "RETURN_PATH_BLOCKED";
+                    }
                 }
                 Vec3d baseProposed = org.nagineco.doppel.minecraft.MinecraftActionExecutor.proposedPosition(
                     previous, org.nagineco.doppel.minecraft.MinecraftActionExecutor.fromLegacyMove(move));
