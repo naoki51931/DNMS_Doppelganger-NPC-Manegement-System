@@ -63,17 +63,18 @@ public final class NaoLifeAI {
     public static HabitBrain.Move move(NaoLifeStore.Nao nao, List<HabitBrain> brains,
             int index, int tick, PersonalityMemoryStore personality,
             boolean rewardEnabled, SharedMemoryReader memory, Vec3d position) {
-        if (nao.goal == NaoLifeStore.Goal.REST || nao.goal == NaoLifeStore.Goal.SAFETY) return HabitBrain.Move.STAY;
-        // All individuals can consult a nearby experience, regardless of its original owner.
+        boolean resting = nao.goal == NaoLifeStore.Goal.REST || nao.goal == NaoLifeStore.Goal.SAFETY;
+        if (resting) return HabitBrain.Move.STAY;
+        // Memory lookup stays in the game adapter until the memory model is decoupled.
         if (memory != null && position != null) {
             var nearby = memory.nearest(nao.goal, position, 16.0);
             if (nearby.isPresent()) return nearby.get().action();
         }
         HabitBrain.Move learned = HabitBrain.sharedDecision(brains, index, tick, personality, rewardEnabled);
-        if (learned != HabitBrain.Move.STAY) return learned;
-        HabitBrain.Move[] directions = { HabitBrain.Move.NORTH, HabitBrain.Move.EAST,
-            HabitBrain.Move.SOUTH, HabitBrain.Move.WEST };
-        return directions[Math.floorMod((tick / 80) + index, directions.length)];
+        var action = org.nagineco.doppel.core.NpcDecisionEngine.decide(
+            false, org.nagineco.doppel.minecraft.MinecraftActionExecutor.fromLegacyMove(learned),
+            tick, index);
+        return org.nagineco.doppel.minecraft.MinecraftActionExecutor.toLegacyMove(action);
     }
     public static void update(NaoLifeStore.Nao nao, boolean moved) {
         if (nao.goal == NaoLifeStore.Goal.REST) nao.energy = Math.min(100, nao.energy + 2);
