@@ -1475,6 +1475,22 @@ public class DoppelgangerMod implements ModInitializer {
                         "npc_collect", nao.lastOutcome);
                     }
                 }
+                if (nao.goal == NaoLifeStore.Goal.BUILD && loopTick % 100 == 0) {
+                    int remaining = Math.max(0,
+                        org.nagineco.doppel.core.NaoBuildingPlan.starter().size() - nao.buildPlanStep);
+                    int availableLogs = nao.inventory == null ? 0 : nao.inventory.entrySet().stream()
+                        .filter(e -> e.getKey() != null && e.getKey().endsWith("_log"))
+                        .mapToInt(e -> Math.max(0, e.getValue() == null ? 0 : e.getValue()))
+                        .sum();
+                    if (remaining == 0) {
+                        nao.goal = NaoLifeStore.Goal.EXPLORE;
+                        nao.goalUntilTick = time + 1200;
+                    } else if (availableLogs == 0) {
+                        nao.goal = NaoLifeStore.Goal.COLLECT;
+                        nao.goalUntilTick = time + 1200;
+                        nao.lastOutcome = "SHELTER NEEDS " + remaining + " LOGS";
+                    }
+                }
                 if (nao.goal == NaoLifeStore.Goal.BUILD && loopTick % 100 == 0
                         && nao.energy >= 20) {
                     var buildSkill = physicalSkills != null && i < physicalSkills.count()
