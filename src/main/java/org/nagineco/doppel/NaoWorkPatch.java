@@ -54,41 +54,53 @@ public final class NaoWorkPatch {
         return true;
     }
 
-    /**
-     * Conservative construction: place one previously harvested log on a nearby
-     * solid surface. Never overwrite an occupied block or create free materials.
-     */
+
+    /** Build the next starter-shelter step using only harvested logs. */
     public static boolean build(ServerWorld world, Vec3d origin, NaoLifeStore.Nao nao) {
-        if (nao.inventory == null || nao.inventory.isEmpty() || nao.energy < 20) return false;
+        if (nao.energy < 20 || nao.buildPlanStep >= org.nagineco.doppel.core.NaoBuildingPlan.starter().size()
+                || nao.buildPlanStep < 0 || nao.inventory == null) return false;
         java.util.List<String> keys = new java.util.ArrayList<>(nao.inventory.keySet());
         java.util.Collections.sort(keys);
+        String material = null;
+        net.minecraft.block.Block block = null;
         for (String key : keys) {
             if (nao.inventory.getOrDefault(key, 0) <= 0) continue;
             net.minecraft.util.Identifier id = net.minecraft.util.Identifier.tryParse(key);
             if (id == null || !Registries.BLOCK.containsId(id)) continue;
-            net.minecraft.block.Block block = Registries.BLOCK.get(id);
-            if (!allowed(block.getDefaultState())) continue;
-            BlockPos center = BlockPos.ofFloored(origin);
-            for (int dx = -2; dx <= 2; dx++)
-                for (int dz = -2; dz <= 2; dz++) {
-                    BlockPos target = center.add(dx, 0, dz);
-                    BlockPos support = target.down();
-                    if (!world.isChunkLoaded(target) || !world.isChunkLoaded(support)) continue;
-                    if (!world.getBlockState(target).isAir()) continue;
-                    if (!world.getBlockState(support).isSolidBlock(world, support)) continue;
-                    if (Vec3d.ofCenter(target).squaredDistanceTo(origin) > 16) continue;
-                    // Avoid building into the NPC's own occupied block.
-                    if (target.equals(center)) continue;
-                    if (!world.getOtherEntities(null, new net.minecraft.util.math.Box(target)).isEmpty()) continue;
-                    if (!world.setBlockState(target, block.getDefaultState(), 3)) continue;
-                    nao.inventory.compute(key, (k, count) -> count == null || count <= 1 ? null : count - 1);
-                    nao.building++;
-                    nao.energy = Math.max(0, nao.energy - 2);
-                    nao.lastAction = "BUILD";
-                    nao.lastOutcome = "BUILT " + key + " at " + target.toShortString();
-                    return true;
-                }
+            var candidate = Registries.BLOCK.get(id);
+            if (!allowed(candidate.getDefaultState())) continue;
+            material = key;
+            block = candidate;
+            break;
         }
-        return false;
+        if (material == null) return false;
+        BlockPos anchor = nao.hasBuildAnchor
+            ? new BlockPos(nao.buildAnchorX, nao.buildAnchorY, nao.buildAnchorZ)
+            : BlockPos.ofFloored(origin);
+        var offset = org.nagineco.doppel.core.NaoBuildingPlan.next(nao.buildPlanStep);
+        BlockPos target = anchor.add(offset.x(), offset.y(), offset.z());
+        BlockPos below = target.down();
+        if (!world.isChunkLoaded(target) || !world.isChunkLoaded(below)
+                || Vec3d.ofCenter(target).squaredDistanceTo(origin) > 16
+                || !world.getBlockState(target).isAir()
+                || !world.getBlockState(below).isSolidBlock(world, below)
+                || !world.getOtherEntities(null, new net.minecraft.util.math.Box(target)).isEmpty())
+            return false;
+        if (!world.setBlockState(target, block.getDefaultState(), 3)) return false;
+        if (!nao.hasBuildAnchor) {
+            nao.hasBuildAnchor = true;
+            nao.buildAnchorX = anchor.getX();
+            nao.buildAnchorY = anchor.getY();
+            nao.buildAnchorZ = anchor.getZ();
+        }
+        nao.inventory.compute(material, (k, count) -> count == null || count <= 1 ? null : count - 1);
+        nao.buildPlanStep++;
+        nao.building++;
+        nao.energy = Math.max(0, nao.energy - 2);
+        nao.lastAction = "BUILD";
+        nao.lastOutcome = "SHELTER " + nao.buildPlanStep + "/"
+            + org.nagineco.doppel.core.NaoBuildingPlan.starter().size()
+            + " " + material + " at " + target.toShortString();
+        return true;
     }
 }
