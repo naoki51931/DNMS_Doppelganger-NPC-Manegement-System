@@ -33,15 +33,9 @@ public final class NaoGoalPlanner {
     /** A deterministic, independently evolving plan derived from the Nao's persistent ambition. */
     public static Plan choosePersonal(NaoLifeStore.Nao nao, SharedMemoryReader memory, long tick) {
         if (nao.energy < 20) return new Plan(NaoLifeStore.Goal.REST, NaoLifeStore.Goal.SAFETY, 1, "recovery");
-        String ambition = (nao.longTermGoal + " " + nao.occupation).toUpperCase(Locale.ROOT);
-        NaoLifeStore.Goal target;
-        if (ambition.matches(".*(WRITE|BOOK|RESEARCH|STUDY|BUILD|CRAFT|ENGINEER).*"))
-            target = NaoLifeStore.Goal.BUILD;
-        else if (ambition.matches(".*(FRIEND|FAMILY|LOVE|CARE|CHILD|TEACH|SOCIAL).*"))
-            target = NaoLifeStore.Goal.SOCIAL;
-        else if (ambition.matches(".*(FARM|COLLECT|FOOD|TRADE|COOK).*"))
-            target = NaoLifeStore.Goal.COLLECT;
-        else target = NaoLifeStore.Goal.EXPLORE;
+        NaoLifeStore.Goal target = NaoLifeStore.Goal.valueOf(
+            org.nagineco.doppel.core.GoalClassifier.classify(
+                nao.longTermGoal, nao.occupation).name());
         if (tick >= nao.planStepUntilTick) {
             String[] steps = {"OBSERVE", "PREPARE", "PRACTICE", "REVIEW"};
             int index = Arrays.asList(steps).indexOf(nao.planStep);
