@@ -1413,6 +1413,25 @@ public class DoppelgangerMod implements ModInitializer {
                             + " support_solid=" + testWorld.getBlockState(buildTarget.down())
                                 .isSolidBlock(testWorld, buildTarget.down())
                             + " inventory=" + nao.inventory + " outcome=" + nao.lastOutcome);
+                        BlockPos nextBuild = nao.buildPlanStep >= 0
+                            && nao.buildPlanStep < blueprintSize
+                            ? new BlockPos(nao.buildAnchorX, nao.buildAnchorY, nao.buildAnchorZ)
+                                .add(org.nagineco.doppel.core.NaoBuildingPlan.next(nao.buildPlanStep).x(),
+                                     org.nagineco.doppel.core.NaoBuildingPlan.next(nao.buildPlanStep).y(),
+                                     org.nagineco.doppel.core.NaoBuildingPlan.next(nao.buildPlanStep).z())
+                            : ciAutoWorkBase;
+                        LOG.info("DNMS_CI_AUTOWORK_NEXT anchor="
+                            + nao.buildAnchorX + "," + nao.buildAnchorY + "," + nao.buildAnchorZ
+                            + " fixture=" + ciAutoWorkBase.toShortString()
+                            + " next=" + nextBuild.toShortString()
+                            + " next_air=" + testWorld.getBlockState(nextBuild).isAir()
+                            + " next_support=" + testWorld.getBlockState(nextBuild.down())
+                                .isSolidBlock(testWorld, nextBuild.down())
+                            + " next_entities=" + testWorld.getOtherEntities(null,
+                                new net.minecraft.util.math.Box(nextBuild)).size()
+                            + " next_distance=" + Vec3d.ofCenter(nextBuild).distanceTo(workerPosition)
+                            + " first_post=" + testWorld.getBlockState(ciAutoWorkBase.add(-1, 0, -1))
+                            + " phase=" + nao.constructionPhase);
                         LOG.info("DNMS_CI_AUTOWORK_RESULT posts=" + placedPosts
                             + "/" + blueprintSize + " remaining_logs=" + remainingFixtureLogs
                             + " inventory_logs=" + inventoryLogs + " ticks=" + elapsed
