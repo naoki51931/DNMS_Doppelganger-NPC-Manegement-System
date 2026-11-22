@@ -63,6 +63,8 @@ public class DoppelgangerMod implements ModInitializer {
     private record RouteWaypoint(String phase, int x, int z, int floorY) {}
     private static final RouteWaypoint[] routeWaypoints = new RouteWaypoint[256];
     /** CI-only baseline: compare actual world entity positions after normal server ticks. */
+    private static BlockPos ciAutoWorkBase;
+    private static long ciAutoWorkStartTick;
     private static final List<Vec3d> ciInitialPositions = new ArrayList<>();
     private static long ciMovementStartTick = -1;
 
@@ -1285,6 +1287,78 @@ public class DoppelgangerMod implements ModInitializer {
                             LOG.severe("DNMS_CI_WORK_FAILED " + ex);
                             return 0;
                         }
+                    })));
+        }
+        // Integration test: a genuine Nao identity follows the ordinary server-tick
+        // planner, harvesting and construction branches (not direct work-method calls).
+        if (Boolean.getBoolean("dnms.ci.smoke")) {
+            CommandRegistrationCallback.EVENT.register((dispatcher, registry, environment) ->
+                dispatcher.register(literal("dnms_ci_autowork")
+                    .requires(source -> source.hasPermissionLevel(4) && source.getEntity() == null)
+                    .executes(context -> {
+                        try {
+                            if (life == null || life.count() < 1 || ghosts.isEmpty() || !lifeAiEnabled)
+                                throw new IllegalStateException("Real DNMS bootstrap missing");
+                            ServerWorld testWorld = context.getSource().getServer().getOverworld();
+                            BlockPos base = testWorld.getSpawnPos().add(0, 18, 0);
+                            for (int dx = -3; dx <= 4; dx++)
+                                for (int dz = -3; dz <= 3; dz++) {
+                                    testWorld.setBlockState(base.add(dx, -1, dz), Blocks.STONE.getDefaultState(), 3);
+                                    for (int dy = 0; dy < 4; dy++)
+                                        testWorld.setBlockState(base.add(dx, dy, dz), Blocks.AIR.getDefaultState(), 3);
+                                }
+                            BlockPos log = base.add(2, 0, 0);
+                            testWorld.setBlockState(log, Blocks.OAK_LOG.getDefaultState(), 3);
+                            ArmorStandEntity ghost = ghosts.get(0);
+                            ghost.refreshPositionAndAngles(base.getX() + 0.5, base.getY() + 0.1,
+                                base.getZ() + 0.5, 0, 0);
+                            NaoLifeStore.Nao nao = life.get(0);
+                            nao.energy = 100;
+                            nao.inventory.clear();
+                            nao.collection = 0;
+                            nao.building = 0;
+                            nao.buildPlanStep = 0;
+                            nao.hasBuildAnchor = true;
+                            nao.buildAnchorX = base.getX();
+                            nao.buildAnchorY = base.getY();
+                            nao.buildAnchorZ = base.getZ();
+                            nao.constructionActive = true;
+                            nao.constructionPhase = "GATHER";
+                            nao.goal = NaoLifeStore.Goal.COLLECT;
+                            nao.goalUntilTick = testWorld.getTime() + 1200;
+                            ciAutoWorkStartTick = testWorld.getTime();
+                            ciAutoWorkBase = base;
+                            LOG.info("DNMS_CI_AUTOWORK_READY");
+                            return 1;
+                        } catch (Exception ex) {
+                            LOG.severe("DNMS_CI_AUTOWORK_FAILED setup " + ex);
+                            return 0;
+                        }
+                    })));
+            CommandRegistrationCallback.EVENT.register((dispatcher, registry, environment) ->
+                dispatcher.register(literal("dnms_ci_autowork_check")
+                    .requires(source -> source.hasPermissionLevel(4) && source.getEntity() == null)
+                    .executes(context -> {
+                        if (ciAutoWorkBase == null || life == null || life.count() == 0) {
+                            LOG.severe("DNMS_CI_AUTOWORK_FAILED no_fixture");
+                            return 0;
+                        }
+                        NaoLifeStore.Nao nao = life.get(0);
+                        ServerWorld testWorld = context.getSource().getServer().getOverworld();
+                        long elapsed = testWorld.getTime() - ciAutoWorkStartTick;
+                        boolean harvested = testWorld.getBlockState(ciAutoWorkBase.add(2, 0, 0)).isAir()
+                            && nao.collection >= 1;
+                        boolean built = nao.building >= 1 && nao.buildPlanStep >= 1;
+                        LOG.info("DNMS_CI_AUTOWORK_RESULT ticks=" + elapsed
+                            + " collected=" + nao.collection + " built=" + nao.building
+                            + " step=" + nao.buildPlanStep + " phase=" + nao.constructionPhase);
+                        if (harvested && built && elapsed >= 100) {
+                            LOG.info("DNMS_CI_AUTOWORK_OK");
+                            return 1;
+                        }
+                        LOG.severe("DNMS_CI_AUTOWORK_FAILED collected=" + harvested
+                            + " built=" + built + " elapsed=" + elapsed);
+                        return 0;
                     })));
         }
         // Dedicated CI smoke command: opt-in, console-only, never enabled in normal play.
