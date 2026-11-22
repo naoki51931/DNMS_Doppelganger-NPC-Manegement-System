@@ -87,13 +87,9 @@ public final class SharedMemoryReader {
                 current.x, current.y, current.z, radius * radius);
             return index < 0 ? Optional.empty() : Optional.of(experiences.get(index));
         }
-        Experience best = null;
-        double distance = radius * radius;
-        for (Experience e : experiences) {
-            if (goal(e.reason()) != goal || e.action() == HabitBrain.Move.STAY) continue;
-            double d = current.squaredDistanceTo(e.position());
-            if (d < distance) { best = e; distance = d; }
-        }
-        return Optional.ofNullable(best);
+        int index = org.nagineco.doppel.core.MemoryNearestPolicy.nearestIndex(
+            packed, experiences.size(), goal.ordinal(),
+            current.x, current.y, current.z, radius * radius);
+        return index < 0 ? Optional.empty() : Optional.of(experiences.get(index));
     }
 }
