@@ -57,10 +57,43 @@ public final class NaoWorkPatch {
             || state.isOf(Blocks.ACACIA_LOG) || state.isOf(Blocks.DARK_OAK_LOG)
             || state.isOf(Blocks.MANGROVE_LOG) || state.isOf(Blocks.CHERRY_LOG);
     }
+    private static boolean isShelterPost(BlockPos pos, NaoLifeStore.Nao nao) {
+        if (!nao.hasBuildAnchor) return false;
+        var offsets = org.nagineco.doppel.core.NaoBuildingPlan.starter();
+        for (int step = 0; step < Math.min(nao.buildPlanStep, offsets.size()); step++) {
+            var offset = offsets.get(step);
+            if (pos.getX() == nao.buildAnchorX + offset.x()
+                    && pos.getY() == nao.buildAnchorY + offset.y()
+                    && pos.getZ() == nao.buildAnchorZ + offset.z()) return true;
+        }
+        return false;
+    }
+
+    /** Harvest nearby natural logs, never the shelter's already placed posts. */
+    private static Optional<BlockPos> findHarvestableLog(ServerWorld world, Vec3d origin,
+            NaoLifeStore.Nao nao) {
+        BlockPos center = BlockPos.ofFloored(origin);
+        for (int radius = 1; radius <= 4; radius++)
+            for (int dy = -1; dy <= 2; dy++)
+                for (int dx = -radius; dx <= radius; dx++)
+                    for (int dz = -radius; dz <= radius; dz++) {
+                        BlockPos p = center.add(dx, dy, dz);
+                        if (!world.isChunkLoaded(p) || isShelterPost(p, nao)
+                                || !allowed(world.getBlockState(p))) continue;
+                        if (world.getBlockState(p.up()).isAir()
+                            || world.getBlockState(p.north()).isAir()
+                            || world.getBlockState(p.south()).isAir()
+                            || world.getBlockState(p.east()).isAir()
+                            || world.getBlockState(p.west()).isAir())
+                            return Optional.of(p.toImmutable());
+                    }
+        return Optional.empty();
+    }
+
     public static boolean harvest(ServerWorld world, Vec3d origin, NaoLifeStore.Nao nao) {
         if (nao.inventory == null) nao.inventory = new java.util.HashMap<>();
         if (nao.inventory.values().stream().mapToInt(Integer::intValue).sum() >= 64) return false;
-        var target = findLog(world, origin);
+        var target = findHarvestableLog(world, origin, nao);
         if (target.isEmpty()) return false;
         BlockPos pos = target.get();
         if (Vec3d.ofCenter(pos).squaredDistanceTo(origin) > 16) return false;
