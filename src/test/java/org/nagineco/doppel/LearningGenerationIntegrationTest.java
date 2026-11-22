@@ -57,6 +57,30 @@ class LearningGenerationIntegrationTest {
         assertThrows(IOException.class, () -> GenerationCheckpointStore.latest(root));
     }
 
+    @Test void generationSupportsAll256NpcLearningSnapshots() throws Exception {
+        Path live = temp.resolve("all-naos");
+        new PersonalityMemoryStore(live);
+        java.util.ArrayList<HabitBrain> all = new java.util.ArrayList<>();
+        for (int i = 0; i < 256; i++) {
+            HabitBrain brain = new HabitBrain();
+            brain.learnMemory(HabitBrain.Move.NORTH, HabitBrain.Emotion.NEUTRAL,
+                HabitBrain.Reason.EXPLORE, 100);
+            all.add(brain);
+        }
+        NpcLearningCheckpoint.save(live, all);
+        Path recording = temp.resolve("recordings-256.json");
+        Files.writeString(recording, "{}", StandardCharsets.UTF_8);
+        Path root = temp.resolve("generations-256");
+        GenerationCheckpointStore.publish(root, recording, live, null, null);
+        Path generation = GenerationCheckpointStore.latest(root);
+        assertEquals("256", Files.readString(generation.resolve("learning_count.txt")).trim());
+        Path restarted = temp.resolve("restarted-256");
+        GenerationCheckpointStore.restoreMemories(generation, restarted);
+        PersonalityMemoryStore memories = new PersonalityMemoryStore(restarted);
+        assertEquals(1, NpcLearningCheckpoint.load(restarted, 0, memories).samples());
+        assertEquals(1, NpcLearningCheckpoint.load(restarted, 255, memories).samples());
+    }
+
     @Test void oldGenerationWithoutLearningManifestStillLoads() throws Exception {
         Path live = temp.resolve("legacy");
         new PersonalityMemoryStore(live);
