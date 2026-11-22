@@ -1331,10 +1331,14 @@ public class DoppelgangerMod implements ModInitializer {
                 HabitBrain.Move move = NaoLifeAI.move(nao, brains, i, loopTick,
                     memories, rewardLearning, sharedKnowledge, previous);
                 Vec3d proposed = HabitBrain.applyMove(previous, move);
-                if (proposed.squaredDistanceTo(samples.get(0)) <= 32 * 32
-                        && world.isAir(BlockPos.ofFloored(proposed))
+                Vec3d anchor = samples.get(0);
+                // Minecraft adapter supplies collision and danger; core owns the policy.
+                boolean withinAnchor = org.nagineco.doppel.core.MovementPolicy.withinAnchor(
+                    proposed.x, proposed.y, proposed.z, anchor.x, anchor.y, anchor.z);
+                if (withinAnchor && world.isAir(BlockPos.ofFloored(proposed))
                         && !NaoLifeAI.danger(world, proposed)) pos = proposed;
-                boolean moved = pos.squaredDistanceTo(previous) > 0.000001;
+                boolean moved = org.nagineco.doppel.core.MovementPolicy.moved(
+                    previous.x, previous.y, previous.z, pos.x, pos.y, pos.z);
                 if (loopTick % 20 == 0) {
                     NaoLifeAI.update(nao, moved);
                     if (rewardLearning && nao.goal == NaoLifeStore.Goal.EXPLORE)
