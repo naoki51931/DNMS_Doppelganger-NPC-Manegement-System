@@ -1193,8 +1193,34 @@ public class DoppelgangerMod implements ModInitializer {
                             spawnGhosts();
                             if (ghosts.size() != DEFAULT_NAOS || life.count() < DEFAULT_NAOS)
                                 throw new IllegalStateException("Incorrect DNMS identity/ghost count");
+                            // A fresh headless world may spawn inside terrain or with
+                            // no walkable surface at the spawn Y. Use an isolated,
+                            // fully loaded, flat fixture and align movement anchors.
+                            BlockPos ciFloor = world.getSpawnPos().add(0, 12, 0);
+                            for (int dx = -18; dx <= 18; dx++)
+                                for (int dz = -18; dz <= 18; dz++) {
+                                    BlockPos floor = ciFloor.add(dx, -1, dz);
+                                    world.setBlockState(floor, Blocks.STONE.getDefaultState(), 3);
+                                    for (int dy = 0; dy <= 2; dy++)
+                                        world.setBlockState(ciFloor.add(dx, dy, dz),
+                                            Blocks.AIR.getDefaultState(), 3);
+                                }
                             ciInitialPositions.clear();
-                            for (ArmorStandEntity entity : ghosts) ciInitialPositions.add(entity.getPos());
+                            for (int slot = 0; slot < ghosts.size(); slot++) {
+                                int dx = (slot % 6) * 3 - 8;
+                                int dz = (slot / 6) * 3 - 5;
+                                Vec3d start = Vec3d.ofCenter(ciFloor.add(dx, 0, dz));
+                                ArmorStandEntity entity = ghosts.get(slot);
+                                entity.refreshPositionAndAngles(start.x, start.y, start.z, 0, 0);
+                                tracks.get(slot).clear();
+                                tracks.get(slot).add(start);
+                                NaoLifeStore.Nao nao = life.get(slot);
+                                nao.goal = NaoLifeStore.Goal.EXPLORE;
+                                nao.constructionActive = false;
+                                nao.energy = 100;
+                                life.rememberPosition(slot, start.x, start.y, start.z);
+                                ciInitialPositions.add(start);
+                            }
                             ciMovementStartTick = world.getTime();
                             LOG.info("DNMS_CI_REAL_BOOTSTRAP_OK identities=" + life.count()
                                 + " ghosts=" + ghosts.size());
