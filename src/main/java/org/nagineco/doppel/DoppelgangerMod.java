@@ -715,6 +715,7 @@ public class DoppelgangerMod implements ModInitializer {
     private static void saveSession() throws IOException {
         if (memories == null) return;
         memories.flush();
+        NpcLearningCheckpoint.save(memories.directory(), brains);
         RecordingSnapshotStore.save(snapshotFile(), tracks, day, selected, freePlay);
         ServerPlayerEntity player = owner == null || world == null ? null
             : world.getServer().getPlayerManager().getPlayer(owner);
@@ -737,6 +738,7 @@ public class DoppelgangerMod implements ModInitializer {
         if (!Files.isRegularFile(playerFile))
             throw new IOException("Missing last playable owner snapshot");
         memories.flush();
+        NpcLearningCheckpoint.save(memories.directory(), brains);
         RecordingSnapshotStore.save(snapshotFile(), tracks, day, selected, freePlay);
         rememberGhostPositions();
         if (life != null) life.save();
@@ -805,10 +807,7 @@ public class DoppelgangerMod implements ModInitializer {
             loadedMemories = new PersonalityMemoryStore(
                 FabricLoader.getInstance().getGameDir().resolve("config/doppelganger/memories"));
             for (int i = 0; i < loadedTracks.size(); i++) {
-                HabitBrain brain = new HabitBrain();
-                loadedMemories.restore(i, brain);
-                loadedMemories.restoreRewards(i, brain);
-                loadedBrains.add(brain);
+                loadedBrains.add(NpcLearningCheckpoint.load(loadedMemories.directory(), i, loadedMemories));
             }
             if (player == null) {
                 if (!snapshot.freePlay || loadedTracks.size() < CHARACTERS || playerState == null)
