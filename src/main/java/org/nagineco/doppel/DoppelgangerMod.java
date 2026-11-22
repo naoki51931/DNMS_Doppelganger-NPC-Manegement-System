@@ -1333,8 +1333,12 @@ public class DoppelgangerMod implements ModInitializer {
                                     for (int dy = 0; dy < 4; dy++)
                                         testWorld.setBlockState(base.add(dx, dy, dz), Blocks.AIR.getDefaultState(), 3);
                                 }
-                            BlockPos log = base.add(2, 0, 0);
-                            testWorld.setBlockState(log, Blocks.OAK_LOG.getDefaultState(), 3);
+                            // Eight real, separate logs for the complete eight-post
+                            // shelter. Keep them outside the 3x3 building footprint.
+                            for (int x = 2; x <= 3; x++)
+                                for (int z = -2; z <= 1; z++)
+                                    testWorld.setBlockState(base.add(x, 0, z),
+                                        Blocks.OAK_LOG.getDefaultState(), 3);
                             ArmorStandEntity ghost = ghosts.get(0);
                             ghost.refreshPositionAndAngles(base.getX() + 0.5, base.getY() + 0.1,
                                 base.getZ() + 0.5, 0, 0);
@@ -1378,9 +1382,27 @@ public class DoppelgangerMod implements ModInitializer {
                         NaoLifeStore.Nao nao = life.get(0);
                         ServerWorld testWorld = context.getSource().getServer().getOverworld();
                         long elapsed = testWorld.getTime() - ciAutoWorkStartTick;
-                        boolean harvested = testWorld.getBlockState(ciAutoWorkBase.add(2, 0, 0)).isAir()
-                            && nao.collection >= 1;
-                        boolean built = nao.building >= 1 && nao.buildPlanStep >= 1;
+                        int blueprintSize = org.nagineco.doppel.core.NaoBuildingPlan.starter().size();
+                        int remainingFixtureLogs = 0;
+                        for (int x = 2; x <= 3; x++)
+                            for (int z = -2; z <= 1; z++)
+                                if (testWorld.getBlockState(ciAutoWorkBase.add(x, 0, z))
+                                        .isOf(Blocks.OAK_LOG)) remainingFixtureLogs++;
+                        int placedPosts = 0;
+                        for (var offset : org.nagineco.doppel.core.NaoBuildingPlan.starter()) {
+                            if (testWorld.getBlockState(ciAutoWorkBase.add(
+                                    offset.x(), offset.y(), offset.z())).isOf(Blocks.OAK_LOG))
+                                placedPosts++;
+                        }
+                        int inventoryLogs = nao.inventory == null ? 0
+                            : nao.inventory.values().stream()
+                                .mapToInt(v -> v == null ? 0 : Math.max(0, v)).sum();
+                        boolean harvested = remainingFixtureLogs == 0 && nao.collection >= blueprintSize;
+                        boolean built = placedPosts == blueprintSize
+                            && nao.building == blueprintSize
+                            && nao.buildPlanStep == blueprintSize
+                            && inventoryLogs == 0
+                            && nao.collection == blueprintSize;
                         Vec3d workerPosition = ghosts.get(0).getPos();
                         BlockPos buildTarget = ciAutoWorkBase.add(-1, 0, -1);
                         LOG.info("DNMS_CI_AUTOWORK_DIAGNOSTIC energy=" + nao.energy
@@ -1391,7 +1413,9 @@ public class DoppelgangerMod implements ModInitializer {
                             + " support_solid=" + testWorld.getBlockState(buildTarget.down())
                                 .isSolidBlock(testWorld, buildTarget.down())
                             + " inventory=" + nao.inventory + " outcome=" + nao.lastOutcome);
-                        LOG.info("DNMS_CI_AUTOWORK_RESULT ticks=" + elapsed
+                        LOG.info("DNMS_CI_AUTOWORK_RESULT posts=" + placedPosts
+                            + "/" + blueprintSize + " remaining_logs=" + remainingFixtureLogs
+                            + " inventory_logs=" + inventoryLogs + " ticks=" + elapsed
                             + " collected=" + nao.collection + " built=" + nao.building
                             + " step=" + nao.buildPlanStep + " phase=" + nao.constructionPhase);
                         if (harvested && built && elapsed >= 100) {
