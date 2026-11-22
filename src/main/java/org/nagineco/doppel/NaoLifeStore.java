@@ -26,6 +26,11 @@ public final class NaoLifeStore {
         public int number;
         public Goal goal = Goal.EXPLORE;
         public int exploration, collection, building, social;
+        /** Persistent starter shelter anchor and completed blueprint steps. */
+        public boolean hasBuildAnchor;
+        public int buildAnchorX, buildAnchorY, buildAnchorZ;
+        public int buildPlanStep;
+
         public int energy = 100;
         public long goalUntilTick;
         public int blockedSteps;
