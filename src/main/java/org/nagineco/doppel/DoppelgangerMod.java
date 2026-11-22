@@ -61,6 +61,10 @@ public class DoppelgangerMod implements ModInitializer {
     /** Ephemeral navigation cache; never part of saved NPC memory/checkpoints. */
     private record RouteWaypoint(String phase, int x, int z, int floorY) {}
     private static final RouteWaypoint[] routeWaypoints = new RouteWaypoint[256];
+    /** CI-only baseline: compare actual world entity positions after normal server ticks. */
+    private static final List<Vec3d> ciInitialPositions = new ArrayList<>();
+    private static long ciMovementStartTick = -1;
+
 
     private static boolean aiMode = true;
     private static PersonalityMemoryStore memories;
@@ -1186,6 +1190,9 @@ public class DoppelgangerMod implements ModInitializer {
                             spawnGhosts();
                             if (ghosts.size() != DEFAULT_NAOS || life.count() < DEFAULT_NAOS)
                                 throw new IllegalStateException("Incorrect DNMS identity/ghost count");
+                            ciInitialPositions.clear();
+                            for (ArmorStandEntity entity : ghosts) ciInitialPositions.add(entity.getPos());
+                            ciMovementStartTick = world.getTime();
                             LOG.info("DNMS_CI_REAL_BOOTSTRAP_OK identities=" + life.count()
                                 + " ghosts=" + ghosts.size());
                             return 1;
@@ -1193,6 +1200,40 @@ public class DoppelgangerMod implements ModInitializer {
                             LOG.severe("DNMS_CI_REAL_BOOTSTRAP_FAILED " + ex);
                             return 0;
                         }
+                    })));
+        }
+        if (Boolean.getBoolean("dnms.ci.smoke")) {
+            CommandRegistrationCallback.EVENT.register((dispatcher, registry, environment) ->
+                dispatcher.register(literal("dnms_ci_movement")
+                    .requires(source -> source.hasPermissionLevel(4) && source.getEntity() == null)
+                    .executes(context -> {
+                        if (!recording || !freePlay || !lifeAiEnabled || !offlineNpcMode
+                                || world == null || ciInitialPositions.size() != 24
+                                || ghosts.size() != 24 || ciMovementStartTick < 0) {
+                            LOG.severe("DNMS_CI_MOVEMENT_FAILED not_initialized");
+                            return 0;
+                        }
+                        long elapsed = world.getTime() - ciMovementStartTick;
+                        int moved = 0;
+                        double maxDistance = 0;
+                        for (int slot = 0; slot < 24; slot++) {
+                            if (ghosts.get(slot).isRemoved()) {
+                                LOG.severe("DNMS_CI_MOVEMENT_FAILED missing_entity=" + slot);
+                                return 0;
+                            }
+                            double distance = ghosts.get(slot).getPos().distanceTo(ciInitialPositions.get(slot));
+                            if (distance > 0.05) moved++;
+                            maxDistance = Math.max(maxDistance, distance);
+                        }
+                        LOG.info("DNMS_CI_MOVEMENT_RESULT elapsed_ticks=" + elapsed
+                            + " moved=" + moved + "/24 max_distance=" + maxDistance);
+                        if (elapsed < 100 || moved == 0) {
+                            LOG.severe("DNMS_CI_MOVEMENT_FAILED elapsed_ticks=" + elapsed
+                                + " moved=" + moved);
+                            return 0;
+                        }
+                        LOG.info("DNMS_CI_MOVEMENT_OK moved=" + moved + "/24");
+                        return 1;
                     })));
         }
         // Dedicated CI smoke command: opt-in, console-only, never enabled in normal play.
