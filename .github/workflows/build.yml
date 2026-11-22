@@ -32,6 +32,14 @@ jobs:
             --tests 'org.nagineco.doppel.core.NpcLearningStateTest' \
             --tests 'org.nagineco.doppel.NpcLearningCheckpointTest' \
             --tests 'org.nagineco.doppel.LearningGenerationIntegrationTest'
+      - name: Verify autonomous construction journey and route scheduling
+        run: |
+          gradle --no-daemon --stacktrace test \
+            --tests 'org.nagineco.doppel.core.NaoConstructionJourneyIntegrationTest' \
+            --tests 'org.nagineco.doppel.core.NaoRouteScheduleTest' \
+            --tests 'org.nagineco.doppel.core.NaoGridPathfinderTest' \
+            --tests 'org.nagineco.doppel.core.NaoConstructionWorkflowTest' \
+            --tests 'org.nagineco.doppel.core.NaoBuildingPlanTest'
       - name: Compile and build Fabric mod (all tests)
         run: |
           # Always use the pinned Gradle from setup-gradle; a wrapper may select another version.
