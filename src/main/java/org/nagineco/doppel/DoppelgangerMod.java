@@ -342,15 +342,24 @@ public class DoppelgangerMod implements ModInitializer {
         if (!lifeAiEnabled || social == null || life == null || memories == null) return;
         if (loopTick % 400 != 0 || ghosts.size() < 2) return;
         var engine = social.engine();
-        for (int i = 0; i < ghosts.size() && i < life.count(); i++) {
-            if (ghosts.get(i).isRemoved()) continue;
-            int partner = -1;
-            double distance = 36.0;
-            for (int j = 0; j < ghosts.size() && j < life.count(); j++) {
-                if (i == j || ghosts.get(j).isRemoved()) continue;
-                double d = ghosts.get(i).getPos().squaredDistanceTo(ghosts.get(j).getPos());
-                if (d < distance) { distance = d; partner = j; }
+        // Minecraft adapter: snapshot world coordinates for the game-independent policy.
+        int count = Math.min(ghosts.size(), life.count());
+        boolean[] active = new boolean[count];
+        double[] x = new double[count], y = new double[count], z = new double[count];
+        for (int i = 0; i < count; i++) {
+            ArmorStandEntity ghost = ghosts.get(i);
+            active[i] = !ghost.isRemoved();
+            if (active[i]) {
+                Vec3d position = ghost.getPos();
+                x[i] = position.x;
+                y[i] = position.y;
+                z[i] = position.z;
             }
+        }
+        for (int i = 0; i < count; i++) {
+            if (!active[i]) continue;
+            int partner = org.nagineco.doppel.core.SocialPartnerSelector.nearest(
+                i, active, x, y, z, 36.0);
             if (partner < 0 || i > partner) continue; // One conversation per pair.
             UUID a = UUID.fromString(life.get(i).id);
             UUID b = UUID.fromString(life.get(partner).id);
