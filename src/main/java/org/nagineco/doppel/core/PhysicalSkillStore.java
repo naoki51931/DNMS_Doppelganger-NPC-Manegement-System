@@ -12,7 +12,7 @@ public final class PhysicalSkillStore {
     private PhysicalSkillStore() {}
 
     public static void save(Path file, List<PhysicalSkillSync.Skill> states) throws IOException {
-        if (states == null || states.isEmpty() || states.size() > 256 || states.contains(null))
+        if (states == null || states.isEmpty() || states.size() > 256 || states.stream().anyMatch(java.util.Objects::isNull))
             throw new IOException("Invalid physical skill snapshot");
         Files.createDirectories(file.toAbsolutePath().getParent());
         Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
