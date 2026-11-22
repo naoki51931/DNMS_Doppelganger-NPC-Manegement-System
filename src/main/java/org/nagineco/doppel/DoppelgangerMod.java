@@ -84,6 +84,36 @@ public class DoppelgangerMod implements ModInitializer {
 
     private static org.nagineco.doppel.core.PhysicalSkillSync.Mode physicalSkillMode =
         org.nagineco.doppel.core.PhysicalSkillSync.Mode.FULL;
+    private static org.nagineco.doppel.core.PhysicalSkillLearningEngine physicalSkills;
+    private static Path physicalSkillsFile() {
+        return FabricLoader.getInstance().getConfigDir().resolve("doppelganger/physical-skills.bin");
+    }
+    private static int physicalSkillPractice(ServerCommandSource src, int slot, int minutes) {
+        if (life == null || slot > life.count())
+            return say(src, "Nao slot is not initialized.");
+        try {
+            int count = life.count();
+            if (physicalSkills == null || physicalSkills.count() != count) {
+                var next = new org.nagineco.doppel.core.PhysicalSkillLearningEngine(count, physicalSkillMode, 1);
+                if (Files.isRegularFile(physicalSkillsFile())) {
+                    var saved = org.nagineco.doppel.core.PhysicalSkillStore.load(physicalSkillsFile());
+                    if (saved.size() > count) return say(src, "Saved skill snapshot has more NPCs; refusing to discard skill data.");
+                    var expanded = new java.util.ArrayList<>(saved);
+                    while (expanded.size() < count)
+                        expanded.add(new org.nagineco.doppel.core.PhysicalSkillSync.Skill(0, 0, 0, 0, 0, 0));
+                    next.restore(expanded);
+                }
+                physicalSkills = next;
+            }
+            physicalSkills.configure(physicalSkillMode, 1);
+            physicalSkills.practice(slot - 1, minutes, 1, 1);
+            org.nagineco.doppel.core.PhysicalSkillStore.save(physicalSkillsFile(), physicalSkills.snapshot());
+            return say(src, "Nao " + slot + " practiced for " + minutes
+                + " minutes; skill sharing mode: " + physicalSkillMode);
+        } catch (IOException | IllegalArgumentException ex) {
+            return say(src, "Physical skill practice failed: " + ex.getMessage());
+        }
+    }
     private static Path physicalSkillModeFile() {
         return FabricLoader.getInstance().getConfigDir().resolve("doppelganger/physical-skill-mode.txt");
     }
@@ -93,6 +123,7 @@ public class DoppelgangerMod implements ModInitializer {
             Files.createDirectories(physicalSkillModeFile().getParent());
             org.nagineco.doppel.core.AtomicTextFile.write(physicalSkillModeFile(), mode.name() + "\n");
             physicalSkillMode = mode;
+            if (physicalSkills != null) physicalSkills.configure(mode, 1);
             return say(src, "Physical skill sync policy: " + mode
                 + " (policy configured; skill simulation integration pending)");
         } catch (IOException ex) {
@@ -1100,6 +1131,12 @@ public class DoppelgangerMod implements ModInitializer {
                 .then(literal("day").then(literal("next")
                     .executes(c -> advanceFreePlayDay(c.getSource()))))
                 .then(literal("physicalskill")
+                    .then(literal("practice")
+                        .then(argument("slot", IntegerArgumentType.integer(1, 256))
+                            .then(argument("minutes", IntegerArgumentType.integer(1, 1440))
+                                .executes(c -> physicalSkillPractice(c.getSource(),
+                                    IntegerArgumentType.getInteger(c, "slot"),
+                                    IntegerArgumentType.getInteger(c, "minutes"))))))
                     .then(literal("individual").executes(c -> physicalSkillModeSet(c.getSource(),
                         org.nagineco.doppel.core.PhysicalSkillSync.Mode.INDIVIDUAL)))
                     .then(literal("technique").executes(c -> physicalSkillModeSet(c.getSource(),
