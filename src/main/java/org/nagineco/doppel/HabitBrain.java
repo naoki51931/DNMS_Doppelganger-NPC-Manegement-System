@@ -14,7 +14,7 @@ public final class HabitBrain {
     public enum Emotion { NEUTRAL, HAPPY, CURIOUS, AFRAID, ANGRY, SAD }
     public enum Reason { NONE, EXPLORE, BUILD, COLLECT, SAFETY, SOCIAL }
 
-    private final org.nagineco.doppel.core.NpcLearningState learning =
+    private org.nagineco.doppel.core.NpcLearningState learning =
         new org.nagineco.doppel.core.NpcLearningState(
             Emotion.values().length, Reason.values().length, Move.values().length);
     private final List<Vec3d> observations = new ArrayList<>();
@@ -29,6 +29,24 @@ public final class HabitBrain {
     public void setReason(Reason value) { reason = java.util.Objects.requireNonNull(value); learning.setMotivation(value.ordinal()); }
     public Emotion emotion() { return emotion; }
     public Reason reason() { return reason; }
+
+    /** Save learning evidence without serializing Minecraft position objects. */
+    public org.nagineco.doppel.core.NpcLearningState.Snapshot learningSnapshot() {
+        return learning.snapshot();
+    }
+
+    /** Replace evidence rather than replaying the same journal a second time. */
+    public void restoreLearning(org.nagineco.doppel.core.NpcLearningState restored) {
+        if (restored == null || restored.snapshot().counts()[0].length != Emotion.values().length
+                || restored.snapshot().counts()[0][0].length != Reason.values().length
+                || restored.snapshot().counts()[0][0][0].length != Move.values().length)
+            throw new IllegalArgumentException("Incompatible NPC learning dimensions");
+        learning = org.nagineco.doppel.core.NpcLearningState.restore(restored.snapshot());
+        emotion = Emotion.values()[learning.emotion()];
+        reason = Reason.values()[learning.motivation()];
+        lastManualMove = null;
+        observations.clear();
+    }
 
     /** Reset movement continuity after AI control or teleport, without resetting learned counts. */
     public void resetObservationAnchor(Vec3d position) {
