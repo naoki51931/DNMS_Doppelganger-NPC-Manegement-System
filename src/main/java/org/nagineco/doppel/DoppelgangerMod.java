@@ -1465,8 +1465,16 @@ public class DoppelgangerMod implements ModInitializer {
                 }
                 HabitBrain.Move move = NaoLifeAI.move(nao, brains, i, loopTick,
                     memories, rewardLearning, sharedKnowledge, previous);
-                Vec3d proposed = org.nagineco.doppel.minecraft.MinecraftActionExecutor.proposedPosition(
+                Vec3d baseProposed = org.nagineco.doppel.minecraft.MinecraftActionExecutor.proposedPosition(
                     previous, org.nagineco.doppel.minecraft.MinecraftActionExecutor.fromLegacyMove(move));
+                // Preserve the movement direction and use a bounded skill-based stride.
+                double baseDistance = baseProposed.distanceTo(previous);
+                double stride = physicalSkills != null && i < physicalSkills.count()
+                    ? org.nagineco.doppel.core.PhysicalMovementPerformance.stepDistance(physicalSkills.state(i))
+                    : org.nagineco.doppel.core.PhysicalMovementPerformance.BASE_STEP;
+                Vec3d proposed = baseDistance > 0
+                    ? previous.add(baseProposed.subtract(previous).multiply(stride / baseDistance))
+                    : previous;
                 Vec3d anchor = samples.get(0);
                 // Minecraft adapter supplies collision and danger; core owns the policy.
                 boolean withinAnchor = org.nagineco.doppel.core.MovementPolicy.withinAnchor(
@@ -1481,6 +1489,13 @@ public class DoppelgangerMod implements ModInitializer {
                         NaoRlpPatch.record(nao, NaoLifeStore.Goal.EXPLORE, moved ? 1 : -1);
                     if (moved && nao.goal == NaoLifeStore.Goal.EXPLORE)
                         life.learn(i, NaoLifeStore.Goal.EXPLORE);
+                    if (moved && physicalSkills != null && i < physicalSkills.count()) {
+                        // Movement is measured from the accepted position, not an attempted step.
+                        double minutes = org.nagineco.doppel.core.PhysicalMovementPerformance.practiceMinutes(
+                            previous.distanceTo(pos));
+                        physicalSkills.configure(physicalSkillMode, 1);
+                        physicalSkills.practice(i, minutes, 1, 0.5);
+                    }
                     nao.blockedSteps = !moved && move != HabitBrain.Move.STAY
                         ? Math.min(100, nao.blockedSteps + 1) : 0;
                     nao.lastAction = move.name();
