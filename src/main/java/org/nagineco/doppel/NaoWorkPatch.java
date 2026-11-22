@@ -29,6 +29,28 @@ public final class NaoWorkPatch {
                     }
         return Optional.empty();
     }
+    /** Find a nearby exposed log beyond immediate harvesting reach, in loaded chunks only. */
+    public static Optional<BlockPos> findDistantLog(ServerWorld world, Vec3d origin, int radius) {
+        if (radius < 1 || radius > 16) throw new IllegalArgumentException("radius");
+        BlockPos center = BlockPos.ofFloored(origin);
+        BlockPos best = null;
+        double bestDistance = Double.POSITIVE_INFINITY;
+        for (int dx = -radius; dx <= radius; dx++)
+            for (int dz = -radius; dz <= radius; dz++)
+                for (int dy = -1; dy <= 2; dy++) {
+                    BlockPos p = center.add(dx, dy, dz);
+                    if (!world.isChunkLoaded(p) || !allowed(world.getBlockState(p))) continue;
+                    if (!(world.getBlockState(p.up()).isAir()
+                        || world.getBlockState(p.north()).isAir()
+                        || world.getBlockState(p.south()).isAir()
+                        || world.getBlockState(p.east()).isAir()
+                        || world.getBlockState(p.west()).isAir())) continue;
+                    double distance = Vec3d.ofCenter(p).squaredDistanceTo(origin);
+                    if (distance < bestDistance) { best = p.toImmutable(); bestDistance = distance; }
+                }
+        return Optional.ofNullable(best);
+    }
+
     private static boolean allowed(BlockState state) {
         return state.isOf(Blocks.OAK_LOG) || state.isOf(Blocks.BIRCH_LOG)
             || state.isOf(Blocks.SPRUCE_LOG) || state.isOf(Blocks.JUNGLE_LOG)
