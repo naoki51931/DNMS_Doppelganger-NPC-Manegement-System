@@ -193,22 +193,29 @@ jobs:
             tail -150 minecraft.log
             exit 1
           fi
-          sleep 20
-          printf '%s\n' dnms_ci_autowork_check >&3
+          # The AI can need several hundred ticks to return from gathering.
+          # Poll the state instead of declaring failure at a fixed 20-second edge.
           autowork_ok=0
-          for attempt in $(seq 1 15); do
+          for attempt in $(seq 1 90); do
+            sleep 2
+            printf '%s\n' dnms_ci_autowork_check >&3
             if grep -q 'DNMS_CI_AUTOWORK_OK' minecraft.log; then
               autowork_ok=1
               break
             fi
             if grep -q 'DNMS_CI_AUTOWORK_FAILED' minecraft.log; then
+              echo 'Autonomous work reported a fatal setup error'
               tail -150 minecraft.log
               exit 1
             fi
-            sleep 1
+            if ! kill -0 "$pid" 2>/dev/null; then
+              echo 'Minecraft server exited during autonomous work'
+              tail -150 minecraft.log
+              exit 1
+            fi
           done
           if [ "$autowork_ok" -ne 1 ]; then
-            echo 'Nao autonomous gather/build did not complete'
+            echo 'Nao autonomous gather/build did not complete within 180 seconds'
             tail -150 minecraft.log
             exit 1
           fi
