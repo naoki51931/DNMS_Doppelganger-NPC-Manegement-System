@@ -54,6 +54,15 @@ public final class GenerationCheckpointStore {
                 org.nagineco.doppel.core.NpcLearningStore.load(snapshot);
             }
         }
+        Path physical = generation.resolve("physical-skills.bin");
+        if (Files.isRegularFile(physical)) {
+            var physicalStates = org.nagineco.doppel.core.PhysicalSkillStore.load(physical);
+            if (Files.isRegularFile(learningCount)) {
+                int expected = Integer.parseInt(Files.readString(learningCount, StandardCharsets.UTF_8).trim());
+                if (physicalStates.size() != expected)
+                    throw new IOException("Physical skill NPC count differs from learning checkpoint count");
+            }
+        }
         return generation;
     }
     public static void publish(Path root, Path json, Path memories, Path playerState, Path lifeState) throws IOException {
@@ -64,6 +73,11 @@ public final class GenerationCheckpointStore {
     }
     public static void publish(Path root, Path json, Path memories, Path playerState,
                                Path lifeState, Path socialState, Path peopleState) throws IOException {
+        publish(root, json, memories, playerState, lifeState, socialState, peopleState, null);
+    }
+    public static void publish(Path root, Path json, Path memories, Path playerState,
+                               Path lifeState, Path socialState, Path peopleState,
+                               Path physicalSkills) throws IOException {
         Files.createDirectories(root);
         String id = String.format(java.util.Locale.ROOT, "generation_%016d", System.nanoTime() & Long.MAX_VALUE);
         Path generation = root.resolve(id);
@@ -83,6 +97,12 @@ public final class GenerationCheckpointStore {
                     throw new IOException("Non-contiguous NPC learning snapshots");
             Files.writeString(generation.resolve("learning_count.txt"),
                 Integer.toString(learningCount) + "\n", StandardCharsets.UTF_8);
+        }
+        if (physicalSkills != null) {
+            var physicalStates = org.nagineco.doppel.core.PhysicalSkillStore.load(physicalSkills);
+            if (learningCount > 0 && physicalStates.size() != learningCount)
+                throw new IOException("Physical skill NPC count differs from learning checkpoint count");
+            Files.copy(physicalSkills, generation.resolve("physical-skills.bin"));
         }
         if (playerState != null) Files.copy(playerState, generation.resolve("player.json"));
         if (lifeState != null) Files.copy(lifeState, generation.resolve("nao_lives.json"));
