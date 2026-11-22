@@ -114,6 +114,26 @@ public class DoppelgangerMod implements ModInitializer {
             return say(src, "Physical skill practice failed: " + ex.getMessage());
         }
     }
+    private static void ensurePhysicalSkills(int count) throws IOException {
+        if (count < 1 || count > 256) throw new IOException("Invalid physical skill NPC count");
+        if (physicalSkills != null && physicalSkills.count() == count) return;
+        var next = new org.nagineco.doppel.core.PhysicalSkillLearningEngine(count, physicalSkillMode, 1);
+        if (Files.isRegularFile(physicalSkillsFile())) {
+            var saved = org.nagineco.doppel.core.PhysicalSkillStore.load(physicalSkillsFile());
+            if (saved.size() > count) throw new IOException("Skill snapshot exceeds active NPC count");
+            var expanded = new java.util.ArrayList<>(saved);
+            while (expanded.size() < count)
+                expanded.add(new org.nagineco.doppel.core.PhysicalSkillSync.Skill(0, 0, 0, 0, 0, 0));
+            next.restore(expanded);
+        }
+        physicalSkills = next;
+    }
+
+    private static void savePhysicalSkills() throws IOException {
+        if (physicalSkills != null)
+            org.nagineco.doppel.core.PhysicalSkillStore.save(physicalSkillsFile(), physicalSkills.snapshot());
+    }
+
     private static Path physicalSkillModeFile() {
         return FabricLoader.getInstance().getConfigDir().resolve("doppelganger/physical-skill-mode.txt");
     }
@@ -276,6 +296,16 @@ public class DoppelgangerMod implements ModInitializer {
         for (int i = 0; i < life.count(); i++) {
             NaoLifeStore.Nao n = life.get(i);
             if (n.lastRoutineDay != currentDay && hour >= 9) {
+                // One bounded work/practice event per simulated day, never once per tick.
+                // The routine marker is persisted by NaoLifeStore with the normal checkpoint.
+                try {
+                    ensurePhysicalSkills(life.count());
+                    physicalSkills.configure(physicalSkillMode, 1);
+                    physicalSkills.practice(i, 30, 0.75, 0.4);
+                } catch (IOException | IllegalArgumentException ex) {
+                    LOG.warning("Physical skill routine deferred: " + ex.getMessage());
+                }
+
                 n.lastRoutineDay = currentDay;
                 String activity = hour < n.workEnd ? "work:" + n.occupation : "home:" + n.residence;
                 memories.rememberEvent(i, day, loopTick, "life_routine",
@@ -307,6 +337,7 @@ public class DoppelgangerMod implements ModInitializer {
         life = new NaoLifeStore(lifeFile());
         life.load();
         for (int i = 0; i < count; i++) life.ensure(i);
+        ensurePhysicalSkills(life.count());
         // Validate stable logical UUIDs and appearance keys before publishing a checkpoint.
         // Existing armor-stand stand-ins remain unchanged until rendering integration.
         try { life.appearanceRegistry(); }
@@ -769,6 +800,7 @@ public class DoppelgangerMod implements ModInitializer {
         if (memories == null) return;
         memories.flush();
         NpcLearningCheckpoint.save(memories.directory(), brains);
+        savePhysicalSkills();
         RecordingSnapshotStore.save(snapshotFile(), tracks, day, selected, freePlay);
         ServerPlayerEntity player = owner == null || world == null ? null
             : world.getServer().getPlayerManager().getPlayer(owner);
@@ -792,6 +824,7 @@ public class DoppelgangerMod implements ModInitializer {
             throw new IOException("Missing last playable owner snapshot");
         memories.flush();
         NpcLearningCheckpoint.save(memories.directory(), brains);
+        savePhysicalSkills();
         RecordingSnapshotStore.save(snapshotFile(), tracks, day, selected, freePlay);
         rememberGhostPositions();
         if (life != null) life.save();
@@ -1621,6 +1654,7 @@ public class DoppelgangerMod implements ModInitializer {
         playableAutoMove = false;
         tracks.clear();
         brains.clear();
+        physicalSkills = null;
         memories = null;
         owner = null;
         world = null;
