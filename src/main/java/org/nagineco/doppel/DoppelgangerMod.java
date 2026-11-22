@@ -1547,12 +1547,37 @@ public class DoppelgangerMod implements ModInitializer {
                 }
                 HabitBrain.Move move = NaoLifeAI.move(nao, brains, i, loopTick,
                     memories, rewardLearning, sharedKnowledge, previous);
-                if (nao.constructionActive && "RETURN".equals(nao.constructionPhase)) {
+                if (nao.constructionActive && ("RETURN".equals(nao.constructionPhase)
+                        || "GATHER".equals(nao.constructionPhase))) {
                     var startCell = new org.nagineco.doppel.core.NaoGridPathfinder.Cell(
                         (int)Math.floor(previous.x), (int)Math.floor(previous.z));
+                    // In gathering mode, navigate toward the nearest exposed log.
+                    // Stop within harvesting range instead of stepping into the tree.
+                    var logTarget = "GATHER".equals(nao.constructionPhase)
+                        ? NaoWorkPatch.findDistantLog(world, previous, 12) : java.util.Optional.<BlockPos>empty();
                     var goalCell = new org.nagineco.doppel.core.NaoGridPathfinder.Cell(
-                        nao.buildAnchorX, nao.buildAnchorZ);
+                        logTarget.map(BlockPos::getX).orElse(nao.buildAnchorX),
+                        logTarget.map(BlockPos::getZ).orElse(nao.buildAnchorZ));
                     int floorY = (int)Math.floor(previous.y);
+                    if (logTarget.isPresent()) {
+                        BlockPos tree = logTarget.get();
+                        // Choose an adjacent empty walkable cell, not the solid log itself.
+                        BlockPos[] candidates = {tree.north(), tree.south(), tree.east(), tree.west()};
+                        BlockPos chosen = null;
+                        double best = Double.POSITIVE_INFINITY;
+                        for (BlockPos candidate : candidates) {
+                            BlockPos feet = new BlockPos(candidate.getX(), floorY, candidate.getZ());
+                            if (!world.isChunkLoaded(feet) || !world.isChunkLoaded(feet.down())
+                                    || !world.isAir(feet)
+                                    || !world.getBlockState(feet.down()).isSolidBlock(world, feet.down()))
+                                continue;
+                            double dist = feet.getSquaredDistance(BlockPos.ofFloored(previous));
+                            if (dist < best) { best = dist; chosen = feet; }
+                        }
+                        if (chosen != null)
+                            goalCell = new org.nagineco.doppel.core.NaoGridPathfinder.Cell(
+                                chosen.getX(), chosen.getZ());
+                    }
                     Vec3d worldAnchor = samples.get(0);
                     var route = org.nagineco.doppel.core.NaoGridPathfinder.find(
                         startCell, goalCell, (x, z) -> {
@@ -1578,7 +1603,8 @@ public class DoppelgangerMod implements ModInitializer {
                         else move = HabitBrain.Move.STAY;
                     } else {
                         move = HabitBrain.Move.STAY;
-                        nao.lastOutcome = "RETURN_PATH_BLOCKED";
+                        nao.lastOutcome = "GATHER".equals(nao.constructionPhase)
+                            ? "GATHER_PATH_BLOCKED_OR_NO_LOG" : "RETURN_PATH_BLOCKED";
                     }
                 }
                 Vec3d baseProposed = org.nagineco.doppel.minecraft.MinecraftActionExecutor.proposedPosition(
