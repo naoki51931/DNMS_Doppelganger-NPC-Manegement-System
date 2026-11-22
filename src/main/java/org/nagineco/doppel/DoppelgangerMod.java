@@ -1148,6 +1148,53 @@ public class DoppelgangerMod implements ModInitializer {
             ? Integer.parseInt(Files.readString(maxNaosFile(), StandardCharsets.UTF_8).trim()) : 256;
             if (configuredMaxNaos < 1 || configuredMaxNaos > 256) configuredMaxNaos = DEFAULT_NAOS;
         } catch (IOException | NumberFormatException ex) { configuredMaxNaos = DEFAULT_NAOS; }
+        // Initialize the actual DNMS identity, memory, and mannequin pipeline headlessly.
+        // Isolated CI command: never available on ordinary game servers.
+        if (Boolean.getBoolean("dnms.ci.smoke")) {
+            CommandRegistrationCallback.EVENT.register((dispatcher, registry, environment) ->
+                dispatcher.register(literal("dnms_ci_bootstrap")
+                    .requires(source -> source.hasPermissionLevel(4) && source.getEntity() == null)
+                    .executes(context -> {
+                        if (recording) return 0;
+                        MinecraftServer server = context.getSource().getServer();
+                        clearGhosts();
+                        tracks.clear();
+                        brains.clear();
+                        reports.clear();
+                        try {
+                            memories = new PersonalityMemoryStore(FabricLoader.getInstance().getGameDir()
+                                .resolve("config/doppelganger/memories"));
+                            initializeLife(DEFAULT_NAOS);
+                            world = server.getOverworld();
+                            dawn = world.getSpawnPos();
+                            owner = UUID.nameUUIDFromBytes("dnms-ci-owner".getBytes(StandardCharsets.UTF_8));
+                            day = 1;
+                            selected = 0;
+                            loopTick = 0;
+                            for (int slot = 0; slot < DEFAULT_NAOS; slot++) {
+                                tracks.add(new ArrayList<>(List.of(Vec3d.ofCenter(dawn))));
+                                HabitBrain brain = new HabitBrain();
+                                memories.restore(slot, brain);
+                                memories.restoreRewards(slot, brain);
+                                brains.add(brain);
+                            }
+                            freePlay = true;
+                            recording = true;
+                            aiMode = true;
+                            lifeAiEnabled = true;
+                            offlineNpcMode = true;
+                            spawnGhosts();
+                            if (ghosts.size() != DEFAULT_NAOS || life.count() < DEFAULT_NAOS)
+                                throw new IllegalStateException("Incorrect DNMS identity/ghost count");
+                            LOG.info("DNMS_CI_REAL_BOOTSTRAP_OK identities=" + life.count()
+                                + " ghosts=" + ghosts.size());
+                            return 1;
+                        } catch (Exception ex) {
+                            LOG.severe("DNMS_CI_REAL_BOOTSTRAP_FAILED " + ex);
+                            return 0;
+                        }
+                    })));
+        }
         // Dedicated CI smoke command: opt-in, console-only, never enabled in normal play.
         if (Boolean.getBoolean("dnms.ci.smoke")) {
             CommandRegistrationCallback.EVENT.register((dispatcher, registry, environment) ->
