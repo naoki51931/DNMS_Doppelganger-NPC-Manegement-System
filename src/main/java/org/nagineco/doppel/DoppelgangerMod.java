@@ -1454,8 +1454,20 @@ public class DoppelgangerMod implements ModInitializer {
                 }
                 if (nao.goal == NaoLifeStore.Goal.COLLECT && loopTick % 100 == 0
                         && nao.energy >= 20) {
-                    boolean harvested = NaoWorkPatch.harvest(world, previous, nao);
+                    // A skill trial gates execution; actual collection still requires a
+                    // nearby exposed log and successful Minecraft block update.
+                    var workSkill = physicalSkills != null && i < physicalSkills.count()
+                        ? physicalSkills.state(i) : null;
+                    long workAttempt = nao.actionAttempts == null ? 0L
+                        : nao.actionAttempts.getOrDefault("COLLECT", 0);
+                    boolean skillReady = org.nagineco.doppel.core.PhysicalWorkPerformance
+                        .canExecuteCollection(workSkill, i, workAttempt);
+                    boolean harvested = skillReady && NaoWorkPatch.harvest(world, previous, nao);
                     life.observeAction(i, NaoActionLearning.Action.COLLECT, harvested);
+                    if (harvested && physicalSkills != null && i < physicalSkills.count()) {
+                        physicalSkills.configure(physicalSkillMode, 1);
+                        physicalSkills.practice(i, 1, 1, 0.25);
+                    }
                     if (harvested) {
                     if (rewardLearning) NaoRlpPatch.record(nao, NaoLifeStore.Goal.COLLECT, 5);
                     report("Nao " + nao.number + " " + nao.lastOutcome);
