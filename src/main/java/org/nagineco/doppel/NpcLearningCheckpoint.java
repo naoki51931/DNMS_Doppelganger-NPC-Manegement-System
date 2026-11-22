@@ -23,6 +23,9 @@ public final class NpcLearningCheckpoint {
             NpcLearningState state = NpcLearningState.restore(brains.get(i).learningSnapshot());
             NpcLearningStore.save(memoryDirectory.resolve(fileName(i)), state);
         }
+        // Remove obsolete slots so checkpoint manifests match the active NPC count.
+        for (int i = brains.size(); i < 256; i++)
+            Files.deleteIfExists(memoryDirectory.resolve(fileName(i)));
     }
 
     /** Prefer the checkpoint snapshot. Fall back to historical Markdown journals. */
