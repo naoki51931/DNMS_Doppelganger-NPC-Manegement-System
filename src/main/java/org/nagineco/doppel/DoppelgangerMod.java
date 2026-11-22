@@ -83,7 +83,7 @@ public class DoppelgangerMod implements ModInitializer {
     }
 
     private static org.nagineco.doppel.core.PhysicalSkillSync.Mode physicalSkillMode =
-        org.nagineco.doppel.core.PhysicalSkillSync.Mode.INDIVIDUAL;
+        org.nagineco.doppel.core.PhysicalSkillSync.Mode.FULL;
     private static Path physicalSkillModeFile() {
         return FabricLoader.getInstance().getConfigDir().resolve("doppelganger/physical-skill-mode.txt");
     }
@@ -1038,7 +1038,7 @@ public class DoppelgangerMod implements ModInitializer {
                 physicalSkillMode = org.nagineco.doppel.core.PhysicalSkillSync.Mode.parse(
                     Files.readString(physicalSkillModeFile(), StandardCharsets.UTF_8));
         } catch (IOException | IllegalArgumentException ex) {
-            physicalSkillMode = org.nagineco.doppel.core.PhysicalSkillSync.Mode.INDIVIDUAL;
+            physicalSkillMode = org.nagineco.doppel.core.PhysicalSkillSync.Mode.FULL;
         }
         try {
             offlineNpcMode = Files.isRegularFile(offlineNpcModeFile())
