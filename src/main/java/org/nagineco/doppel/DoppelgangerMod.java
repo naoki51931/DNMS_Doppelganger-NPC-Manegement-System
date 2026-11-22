@@ -1452,6 +1452,39 @@ public class DoppelgangerMod implements ModInitializer {
                         recalled.ifPresent(value -> nao.lastRecalledMemory = value);
                     } catch (IOException ex) { report("Recall error: " + ex.getMessage()); }
                 }
+                // Construction is a retained task, not a temporary COLLECT goal.
+                if (nao.goal == NaoLifeStore.Goal.BUILD && !nao.constructionActive
+                        && nao.buildPlanStep < org.nagineco.doppel.core.NaoBuildingPlan.starter().size()) {
+                    nao.constructionActive = true;
+                    if (!nao.hasBuildAnchor) {
+                        BlockPos site = BlockPos.ofFloored(previous);
+                        nao.hasBuildAnchor = true;
+                        nao.buildAnchorX = site.getX();
+                        nao.buildAnchorY = site.getY();
+                        nao.buildAnchorZ = site.getZ();
+                    }
+                }
+                if (nao.constructionActive && loopTick % 20 == 0 && nao.energy >= 20
+                        && nao.goal != NaoLifeStore.Goal.SAFETY) {
+                    int logs = nao.inventory == null ? 0 : nao.inventory.entrySet().stream()
+                        .filter(e -> e.getKey() != null && e.getKey().endsWith("_log"))
+                        .mapToInt(e -> Math.max(0, e.getValue() == null ? 0 : e.getValue())).sum();
+                    boolean atSite = org.nagineco.doppel.core.NaoConstructionWorkflow.near(
+                        previous.x, previous.z, nao.buildAnchorX + 0.5, nao.buildAnchorZ + 0.5);
+                    var phase = org.nagineco.doppel.core.NaoConstructionWorkflow.next(
+                        true, nao.buildPlanStep, logs, atSite);
+                    nao.constructionPhase = phase.name();
+                    switch (phase) {
+                        case GATHER -> { nao.goal = NaoLifeStore.Goal.COLLECT; nao.goalUntilTick = time + 1200; }
+                        case RETURN, BUILD -> { nao.goal = NaoLifeStore.Goal.BUILD; nao.goalUntilTick = time + 1200; }
+                        case COMPLETE -> {
+                            nao.constructionActive = false;
+                            nao.goal = NaoLifeStore.Goal.EXPLORE;
+                            nao.goalUntilTick = time + 1200;
+                        }
+                        default -> {}
+                    }
+                }
                 if (nao.goal == NaoLifeStore.Goal.COLLECT && loopTick % 100 == 0
                         && nao.energy >= 20) {
                     // A skill trial gates execution; actual collection still requires a
@@ -1514,6 +1547,14 @@ public class DoppelgangerMod implements ModInitializer {
                 }
                 HabitBrain.Move move = NaoLifeAI.move(nao, brains, i, loopTick,
                     memories, rewardLearning, sharedKnowledge, previous);
+                if (nao.constructionActive && "RETURN".equals(nao.constructionPhase)) {
+                    double dx = nao.buildAnchorX + 0.5 - previous.x;
+                    double dz = nao.buildAnchorZ + 0.5 - previous.z;
+                    if (Math.abs(dx) > Math.abs(dz))
+                        move = dx > 0 ? HabitBrain.Move.EAST : HabitBrain.Move.WEST;
+                    else if (Math.abs(dz) > 0.01)
+                        move = dz > 0 ? HabitBrain.Move.SOUTH : HabitBrain.Move.NORTH;
+                }
                 Vec3d baseProposed = org.nagineco.doppel.minecraft.MinecraftActionExecutor.proposedPosition(
                     previous, org.nagineco.doppel.minecraft.MinecraftActionExecutor.fromLegacyMove(move));
                 // Preserve the movement direction and use a bounded skill-based stride.
