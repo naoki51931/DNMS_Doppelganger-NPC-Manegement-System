@@ -1236,6 +1236,56 @@ public class DoppelgangerMod implements ModInitializer {
                         return 1;
                     })));
         }
+        // Exercise real world block mutations with the production harvesting/building methods.
+        if (Boolean.getBoolean("dnms.ci.smoke")) {
+            CommandRegistrationCallback.EVENT.register((dispatcher, registry, environment) ->
+                dispatcher.register(literal("dnms_ci_work")
+                    .requires(source -> source.hasPermissionLevel(4) && source.getEntity() == null)
+                    .executes(context -> {
+                        try {
+                            ServerWorld testWorld = context.getSource().getServer().getOverworld();
+                            BlockPos spawn = testWorld.getSpawnPos();
+                            // Keep the fixture above natural terrain and within the loaded spawn area.
+                            BlockPos base = spawn.add(0, 12, 0);
+                            for (int dx = -2; dx <= 3; dx++)
+                                for (int dz = -2; dz <= 2; dz++) {
+                                    BlockPos floor = base.add(dx, -1, dz);
+                                    testWorld.setBlockState(floor, Blocks.STONE.getDefaultState(), 3);
+                                    for (int dy = 0; dy <= 3; dy++)
+                                        testWorld.setBlockState(base.add(dx, dy, dz),
+                                            Blocks.AIR.getDefaultState(), 3);
+                                }
+                            BlockPos sourceLog = base.add(2, 0, 0);
+                            BlockPos destination = base.add(-1, 0, -1);
+                            testWorld.setBlockState(sourceLog, Blocks.OAK_LOG.getDefaultState(), 3);
+                            NaoLifeStore.Nao worker = new NaoLifeStore.Nao();
+                            worker.energy = 100;
+                            worker.hasBuildAnchor = true;
+                            worker.buildAnchorX = base.getX();
+                            worker.buildAnchorY = base.getY();
+                            worker.buildAnchorZ = base.getZ();
+                            Vec3d origin = Vec3d.ofCenter(base);
+                            if (!NaoWorkPatch.harvest(testWorld, origin, worker))
+                                throw new IllegalStateException("harvest returned false");
+                            if (!testWorld.getBlockState(sourceLog).isAir()
+                                    || worker.collection != 1
+                                    || worker.inventory.getOrDefault("minecraft:oak_log", 0) != 1)
+                                throw new IllegalStateException("harvest world/inventory mismatch");
+                            LOG.info("DNMS_CI_HARVEST_OK collected=1 source_cleared=true");
+                            if (!NaoWorkPatch.build(testWorld, origin, worker))
+                                throw new IllegalStateException("build returned false");
+                            if (!testWorld.getBlockState(destination).isOf(Blocks.OAK_LOG)
+                                    || worker.buildPlanStep != 1 || worker.building != 1
+                                    || worker.inventory.getOrDefault("minecraft:oak_log", 0) != 0)
+                                throw new IllegalStateException("build world/inventory mismatch");
+                            LOG.info("DNMS_CI_BUILD_OK placed=1 inventory_consumed=true step=1");
+                            return 1;
+                        } catch (Exception ex) {
+                            LOG.severe("DNMS_CI_WORK_FAILED " + ex);
+                            return 0;
+                        }
+                    })));
+        }
         // Dedicated CI smoke command: opt-in, console-only, never enabled in normal play.
         if (Boolean.getBoolean("dnms.ci.smoke")) {
             CommandRegistrationCallback.EVENT.register((dispatcher, registry, environment) ->
