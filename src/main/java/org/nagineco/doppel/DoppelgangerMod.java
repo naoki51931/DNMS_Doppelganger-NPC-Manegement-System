@@ -1351,6 +1351,12 @@ public class DoppelgangerMod implements ModInitializer {
                             nao.constructionActive = true;
                             nao.constructionPhase = "GATHER";
                             nao.goal = NaoLifeStore.Goal.COLLECT;
+                            // Align the route origin with the isolated construction fixture.
+                            Vec3d site = ghost.getPos();
+                            tracks.get(0).clear();
+                            tracks.get(0).add(site);
+                            life.rememberPosition(0, site.x, site.y, site.z);
+                            routeWaypoints[0] = null;
                             nao.goalUntilTick = testWorld.getTime() + 1200;
                             ciAutoWorkStartTick = testWorld.getTime();
                             ciAutoWorkBase = base;
@@ -1375,6 +1381,16 @@ public class DoppelgangerMod implements ModInitializer {
                         boolean harvested = testWorld.getBlockState(ciAutoWorkBase.add(2, 0, 0)).isAir()
                             && nao.collection >= 1;
                         boolean built = nao.building >= 1 && nao.buildPlanStep >= 1;
+                        Vec3d workerPosition = ghosts.get(0).getPos();
+                        BlockPos buildTarget = ciAutoWorkBase.add(-1, 0, -1);
+                        LOG.info("DNMS_CI_AUTOWORK_DIAGNOSTIC energy=" + nao.energy
+                            + " goal=" + nao.goal + " position=" + workerPosition
+                            + " target=" + buildTarget.toShortString()
+                            + " distance=" + workerPosition.distanceTo(Vec3d.ofCenter(buildTarget))
+                            + " target_air=" + testWorld.getBlockState(buildTarget).isAir()
+                            + " support_solid=" + testWorld.getBlockState(buildTarget.down())
+                                .isSolidBlock(testWorld, buildTarget.down())
+                            + " inventory=" + nao.inventory + " outcome=" + nao.lastOutcome);
                         LOG.info("DNMS_CI_AUTOWORK_RESULT ticks=" + elapsed
                             + " collected=" + nao.collection + " built=" + nao.building
                             + " step=" + nao.buildPlanStep + " phase=" + nao.constructionPhase);
@@ -1818,7 +1834,8 @@ public class DoppelgangerMod implements ModInitializer {
                 HabitBrain.Move move = NaoLifeAI.move(nao, brains, i, loopTick,
                     memories, rewardLearning, sharedKnowledge, previous);
                 if (nao.constructionActive && ("RETURN".equals(nao.constructionPhase)
-                        || "GATHER".equals(nao.constructionPhase))) {
+                        || "GATHER".equals(nao.constructionPhase)
+                        || "BUILD".equals(nao.constructionPhase))) {
                     if (org.nagineco.doppel.core.NaoRouteSchedule.shouldRefresh(i, loopTick,
                             routeWaypoints[i] == null,
                             routeWaypoints[i] != null && (!routeWaypoints[i].phase().equals(nao.constructionPhase)
