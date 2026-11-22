@@ -119,6 +119,34 @@ jobs:
             exit 1
           fi
           echo 'DNMS real identities and NPC stand-ins bootstrapped successfully'
+          # Allow the ordinary Fabric END_SERVER_TICK AI loop to run.
+          sleep 10
+          printf '%s\n' dnms_ci_movement >&3
+          movement_ok=0
+          for attempt in $(seq 1 30); do
+            if grep -q 'DNMS_CI_MOVEMENT_OK' minecraft.log; then
+              movement_ok=1
+              break
+            fi
+            if grep -q 'DNMS_CI_MOVEMENT_FAILED' minecraft.log; then
+              echo 'DNMS NPC movement test failed'
+              tail -150 minecraft.log
+              exit 1
+            fi
+            if ! kill -0 "$pid" 2>/dev/null; then
+              echo 'Minecraft server exited before movement verification'
+              tail -150 minecraft.log
+              exit 1
+            fi
+            sleep 1
+          done
+          if [ "$movement_ok" -ne 1 ]; then
+            echo 'DNMS movement verification timed out'
+            tail -150 minecraft.log
+            exit 1
+          fi
+          grep 'DNMS_CI_MOVEMENT_RESULT' minecraft.log
+
           printf '%s\n' stop >&3
           echo 'Minecraft 1.21.1 Fabric server started and 24 test entities spawned'
 
