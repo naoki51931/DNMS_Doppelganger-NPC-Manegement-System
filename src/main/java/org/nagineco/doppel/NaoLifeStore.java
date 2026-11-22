@@ -30,6 +30,10 @@ public final class NaoLifeStore {
         public boolean hasBuildAnchor;
         public int buildAnchorX, buildAnchorY, buildAnchorZ;
         public int buildPlanStep;
+        /** Retained across collection trips and ordinary goal replanning. */
+        public boolean constructionActive;
+        public String constructionPhase = "IDLE";
+
 
         public int energy = 100;
         public long goalUntilTick;
