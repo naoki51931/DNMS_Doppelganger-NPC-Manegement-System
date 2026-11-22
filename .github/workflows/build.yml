@@ -25,10 +25,17 @@ jobs:
         run: |
           java -version
           gradle --version
-      - name: Compile and build Fabric mod
+      - name: Run learning persistence and checkpoint regression tests
+        run: |
+          gradle --no-daemon --stacktrace clean test \
+            --tests 'org.nagineco.doppel.core.NpcLearningStoreTest' \
+            --tests 'org.nagineco.doppel.core.NpcLearningStateTest' \
+            --tests 'org.nagineco.doppel.NpcLearningCheckpointTest' \
+            --tests 'org.nagineco.doppel.LearningGenerationIntegrationTest'
+      - name: Compile and build Fabric mod (all tests)
         run: |
           # Always use the pinned Gradle from setup-gradle; a wrapper may select another version.
-          gradle --no-daemon --stacktrace clean build
+          gradle --no-daemon --stacktrace build
       - name: Upload test reports on failure
         if: failure()
         uses: actions/upload-artifact@v4
