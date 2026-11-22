@@ -76,7 +76,7 @@ jobs:
             tail -150 minecraft.log
             exit 1
           }
-          printf 'dnms_ci_spawn\\n' >&3
+          printf '%s\n' dnms_ci_spawn >&3
           spawned=0
           for attempt in $(seq 1 30); do
             if grep -q 'DNMS_CI_SPAWN_OK count=24' minecraft.log; then
@@ -94,7 +94,7 @@ jobs:
             tail -100 minecraft.log
             exit 1
           fi
-          printf 'stop\\n' >&3
+          printf '%s\n' stop >&3
           echo 'Minecraft 1.21.1 Fabric server started and 24 test entities spawned'
 
       - name: Upload server logs
