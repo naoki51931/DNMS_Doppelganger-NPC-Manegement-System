@@ -173,6 +173,46 @@ jobs:
             exit 1
           fi
           echo 'Real Minecraft block harvesting and construction verified'
+          # Run the normal AI tick loop with a real Nao identity and a controlled
+          # harvest/build fixture, then assert observed world and progress changes.
+          printf '%s\n' dnms_ci_autowork >&3
+          autowork_ready=0
+          for attempt in $(seq 1 20); do
+            if grep -q 'DNMS_CI_AUTOWORK_READY' minecraft.log; then
+              autowork_ready=1
+              break
+            fi
+            if grep -q 'DNMS_CI_AUTOWORK_FAILED' minecraft.log; then
+              tail -150 minecraft.log
+              exit 1
+            fi
+            sleep 1
+          done
+          if [ "$autowork_ready" -ne 1 ]; then
+            echo 'Nao autonomous work fixture failed to initialize'
+            tail -150 minecraft.log
+            exit 1
+          fi
+          sleep 20
+          printf '%s\n' dnms_ci_autowork_check >&3
+          autowork_ok=0
+          for attempt in $(seq 1 15); do
+            if grep -q 'DNMS_CI_AUTOWORK_OK' minecraft.log; then
+              autowork_ok=1
+              break
+            fi
+            if grep -q 'DNMS_CI_AUTOWORK_FAILED' minecraft.log; then
+              tail -150 minecraft.log
+              exit 1
+            fi
+            sleep 1
+          done
+          if [ "$autowork_ok" -ne 1 ]; then
+            echo 'Nao autonomous gather/build did not complete'
+            tail -150 minecraft.log
+            exit 1
+          fi
+          grep 'DNMS_CI_AUTOWORK_RESULT' minecraft.log
           printf '%s\n' stop >&3
           echo 'Minecraft 1.21.1 Fabric server started and 24 test entities spawned'
 
