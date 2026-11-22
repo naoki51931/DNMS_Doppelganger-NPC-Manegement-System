@@ -1555,7 +1555,10 @@ public class DoppelgangerMod implements ModInitializer {
                         || "GATHER".equals(nao.constructionPhase))) {
                     if (org.nagineco.doppel.core.NaoRouteSchedule.shouldRefresh(i, loopTick,
                             routeWaypoints[i] == null,
-                            routeWaypoints[i] != null && !routeWaypoints[i].phase().equals(nao.constructionPhase))) {
+                            routeWaypoints[i] != null && (!routeWaypoints[i].phase().equals(nao.constructionPhase)
+                                || (routeWaypoints[i].x() != Integer.MIN_VALUE
+                                    && Math.abs(previous.x - routeWaypoints[i].x() - 0.5) < 0.15
+                                    && Math.abs(previous.z - routeWaypoints[i].z() - 0.5) < 0.15)))) {
                     var startCell = new org.nagineco.doppel.core.NaoGridPathfinder.Cell(
                         (int)Math.floor(previous.x), (int)Math.floor(previous.z));
                     // In gathering mode, navigate toward the nearest exposed log.
@@ -1604,13 +1607,16 @@ public class DoppelgangerMod implements ModInitializer {
                         routeWaypoints[i] = new RouteWaypoint(nao.constructionPhase,
                             nextCell.x(), nextCell.z(), floorY);
                     } else {
-                        routeWaypoints[i] = null;
+                        // Negative cache prevents an unreachable destination from
+                        // triggering another full A* scan on every movement tick.
+                        routeWaypoints[i] = new RouteWaypoint(nao.constructionPhase,
+                            Integer.MIN_VALUE, Integer.MIN_VALUE, floorY);
                         nao.lastOutcome = "GATHER".equals(nao.constructionPhase)
                             ? "GATHER_PATH_BLOCKED_OR_NO_LOG" : "RETURN_PATH_BLOCKED";
                     }
                     }
                     RouteWaypoint waypoint = routeWaypoints[i];
-                    if (waypoint != null) {
+                    if (waypoint != null && waypoint.x() != Integer.MIN_VALUE) {
                         double dx = waypoint.x() + 0.5 - previous.x;
                         double dz = waypoint.z() + 0.5 - previous.z;
                         if (Math.abs(dx) > Math.abs(dz))
