@@ -1571,7 +1571,7 @@ public class DoppelgangerMod implements ModInitializer {
                                     || !world.isAir(feet)
                                     || !world.getBlockState(feet.down()).isSolidBlock(world, feet.down()))
                                 continue;
-                            double dist = feet.getSquaredDistance(BlockPos.ofFloored(previous));
+                            double dist = Vec3d.ofCenter(feet).squaredDistanceTo(previous);
                             if (dist < best) { best = dist; chosen = feet; }
                         }
                         if (chosen != null)
