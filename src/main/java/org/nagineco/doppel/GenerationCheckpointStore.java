@@ -35,6 +35,21 @@ public final class GenerationCheckpointStore {
             throw new IOException("Incomplete checkpoint generation " + id);
         if (!Files.isRegularFile(generation.resolve("memories/nao_personality.md")))
             throw new IOException("Missing shared personality");
+        Path learningCount = generation.resolve("learning_count.txt");
+        if (Files.isRegularFile(learningCount)) {
+            int expected;
+            try {
+                expected = Integer.parseInt(Files.readString(learningCount, StandardCharsets.UTF_8).trim());
+            } catch (NumberFormatException ex) {
+                throw new IOException("Invalid learning snapshot manifest", ex);
+            }
+            if (expected < 1 || expected > 256)
+                throw new IOException("Invalid learning snapshot count");
+            for (int i = 0; i < expected; i++)
+                if (!Files.isRegularFile(generation.resolve("memories")
+                        .resolve(NpcLearningCheckpoint.fileName(i))))
+                    throw new IOException("Missing learning snapshot for Nao " + (i + 1));
+        }
         return generation;
     }
     public static void publish(Path root, Path json, Path memories, Path playerState, Path lifeState) throws IOException {
@@ -54,6 +69,17 @@ public final class GenerationCheckpointStore {
         for (String name : MEMORY_FILES)
             if (Files.isRegularFile(memories.resolve(name)))
                 Files.copy(memories.resolve(name), memoryDest.resolve(name));
+        int learningCount = 0;
+        while (learningCount < 256 && Files.isRegularFile(
+                memories.resolve(NpcLearningCheckpoint.fileName(learningCount))))
+            learningCount++;
+        if (learningCount > 0) {
+            for (int i = learningCount; i < 256; i++)
+                if (Files.isRegularFile(memories.resolve(NpcLearningCheckpoint.fileName(i))))
+                    throw new IOException("Non-contiguous NPC learning snapshots");
+            Files.writeString(generation.resolve("learning_count.txt"),
+                Integer.toString(learningCount) + "\n", StandardCharsets.UTF_8);
+        }
         if (playerState != null) Files.copy(playerState, generation.resolve("player.json"));
         if (lifeState != null) Files.copy(lifeState, generation.resolve("nao_lives.json"));
         if (socialState != null) Files.copy(socialState, generation.resolve("nao_social.json"));
