@@ -147,6 +147,32 @@ jobs:
           fi
           grep 'DNMS_CI_MOVEMENT_RESULT' minecraft.log
 
+          printf '%s\n' dnms_ci_work >&3
+          work_ok=0
+          for attempt in $(seq 1 30); do
+            if grep -q 'DNMS_CI_HARVEST_OK' minecraft.log \
+                && grep -q 'DNMS_CI_BUILD_OK' minecraft.log; then
+              work_ok=1
+              break
+            fi
+            if grep -q 'DNMS_CI_WORK_FAILED' minecraft.log; then
+              echo 'Real Minecraft harvest/build work test failed'
+              tail -150 minecraft.log
+              exit 1
+            fi
+            if ! kill -0 "$pid" 2>/dev/null; then
+              echo 'Minecraft server exited during work verification'
+              tail -150 minecraft.log
+              exit 1
+            fi
+            sleep 1
+          done
+          if [ "$work_ok" -ne 1 ]; then
+            echo 'Timed out waiting for Minecraft harvest/build verification'
+            tail -150 minecraft.log
+            exit 1
+          fi
+          echo 'Real Minecraft block harvesting and construction verified'
           printf '%s\n' stop >&3
           echo 'Minecraft 1.21.1 Fabric server started and 24 test entities spawned'
 
