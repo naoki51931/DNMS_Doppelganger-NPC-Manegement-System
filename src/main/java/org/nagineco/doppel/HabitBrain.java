@@ -60,7 +60,7 @@ public final class HabitBrain {
     }
 
     public void learnReward(Move move, Emotion e, Reason r, int part, double value) {
-        if (Double.isFinite(value)) rewards[part][e.ordinal()][r.ordinal()][move.ordinal()] += Math.max(-20, Math.min(20, value));
+        if (Double.isFinite(value)) rewards[part][e.ordinal()][r.ordinal()][move.ordinal()] += org.nagineco.doppel.core.LearnedActionPolicy.clippedReward(value);
     }
 
     public Move lastManualMove() { return lastManualMove; }
@@ -98,10 +98,7 @@ public final class HabitBrain {
             values = fallback;
         }
         if (sum(values) == 0) return Move.STAY;
-        int best = 0;
-        for (int i = 1; i < values.length; i++)
-            if (values[i] > values[best]) best = i;
-        return Move.values()[best];
+        return Move.values()[org.nagineco.doppel.core.LearnedActionPolicy.dominant(values)];
     }
 
     /**
@@ -125,19 +122,17 @@ public final class HabitBrain {
             double individualBoost = 1.0; // All 24 Nao experiences have equal weight.
             for (Reason reason : Reason.values()) {
                 // A preference of 0 suppresses the action evidence for this reason.
-                double affinity = personality.preference(reason) / 5.0;
                 for (Emotion emotion : Emotion.values()) {
                     int[] observed = brain.counts[part][emotion.ordinal()][reason.ordinal()];
                     for (int m = 0; m < scores.length; m++) {
-                        scores[m] += (observed[m] + (rewardEnabled ? brain.rewards[part][emotion.ordinal()][reason.ordinal()][m] : 0)) * affinity * individualBoost;
+                        scores[m] += org.nagineco.doppel.core.LearnedActionPolicy.weightedEvidence(
+                            observed[m], brain.rewards[part][emotion.ordinal()][reason.ordinal()][m],
+                            personality.preference(reason), rewardEnabled) * individualBoost;
                     }
                 }
             }
         }
-        int best = 0;
-        for (int m = 1; m < scores.length; m++)
-            if (scores[m] > scores[best]) best = m;
-        return scores[best] > 0 ? Move.values()[best] : Move.STAY;
+        return Move.values()[org.nagineco.doppel.core.LearnedActionPolicy.dominantPositive(scores)];
     }
 
     public static Vec3d applyMove(Vec3d position, Move move) {
