@@ -284,16 +284,7 @@ public class DoppelgangerMod implements ModInitializer {
         return FabricLoader.getInstance().getConfigDir().resolve("doppelganger/mip-completed.txt");
     }
     private static void writeAtomic(Path file, String value) throws IOException {
-        Files.createDirectories(file.getParent());
-        Path temp = file.resolveSibling(file.getFileName() + ".tmp");
-        try {
-            Files.writeString(temp, value, StandardCharsets.UTF_8);
-            try { Files.move(temp, file, java.nio.file.StandardCopyOption.ATOMIC_MOVE,
-                java.nio.file.StandardCopyOption.REPLACE_EXISTING); }
-            catch (java.nio.file.AtomicMoveNotSupportedException ex) {
-                Files.move(temp, file, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-            }
-        } finally { Files.deleteIfExists(temp); }
+        org.nagineco.doppel.core.AtomicTextFile.write(file, value);
     }
     private static void restoreMipCompletion() {
         lastIntegratedTrainingDay = Integer.MIN_VALUE;
@@ -1564,17 +1555,11 @@ public class DoppelgangerMod implements ModInitializer {
     }
 
     private static int parseMinecraftClock(String clock) {
-        if (!clock.matches("(?:[01][0-9]|2[0-3]):[0-5][0-9]"))
-            throw new IllegalArgumentException("Expected HH:mm from 00:00 to 23:59.");
-        int hour = Integer.parseInt(clock.substring(0, 2));
-        int minute = Integer.parseInt(clock.substring(3, 5));
-        // Minecraft tick 0 is 06:00; midnight (00:00) is tick 18000.
-        return ((hour * 1000 + minute * 1000 / 60) + 18000) % DAY_TICKS;
+        return org.nagineco.doppel.core.MinecraftClock.parse(clock);
     }
 
     private static String formatMinecraftClock(int tick) {
-        int minutes = ((tick + 6000) % DAY_TICKS) * 1440 / DAY_TICKS;
-        return String.format(java.util.Locale.ROOT, "%02d:%02d", minutes / 60, minutes % 60);
+        return org.nagineco.doppel.core.MinecraftClock.format(tick);
     }
 
     private static int mipTimeStatus(ServerCommandSource src) {
