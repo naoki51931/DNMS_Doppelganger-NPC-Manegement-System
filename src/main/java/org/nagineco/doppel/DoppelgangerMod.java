@@ -815,7 +815,8 @@ public class DoppelgangerMod implements ModInitializer {
         if (owner != null) writeAtomic(sessionOwnerFile(), owner.toString());
         GenerationCheckpointStore.publish(checkpointRoot(), snapshotFile(),
             memories.directory(), playerFile, life == null ? null : lifeFile(),
-            social == null ? null : socialFile(), people == null ? null : peopleFile());
+            social == null ? null : socialFile(), people == null ? null : peopleFile(),
+            physicalSkills == null ? null : physicalSkillsFile());
     }
     private static void saveOfflineSession() throws IOException {
         if (memories == null || owner == null || world == null) return;
@@ -833,7 +834,8 @@ public class DoppelgangerMod implements ModInitializer {
         writeAtomic(sessionOwnerFile(), owner.toString());
         GenerationCheckpointStore.publish(checkpointRoot(), snapshotFile(),
             memories.directory(), playerFile, life == null ? null : lifeFile(),
-            social == null ? null : socialFile());
+            social == null ? null : socialFile(), people == null ? null : peopleFile(),
+            physicalSkills == null ? null : physicalSkillsFile());
     }
     private static int saveCommand(ServerCommandSource src) {
         if (!recording) return say(src, "No active session to save.");
@@ -885,6 +887,19 @@ public class DoppelgangerMod implements ModInitializer {
                 Files.createDirectories(peopleFile().getParent());
                 Files.copy(generation.resolve("people.json"), peopleFile(),
                     java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+            if (generation != null) {
+                Path savedPhysical = generation.resolve("physical-skills.bin");
+                if (Files.isRegularFile(savedPhysical)) {
+                    Files.createDirectories(physicalSkillsFile().getParent());
+                    Files.copy(savedPhysical, physicalSkillsFile(),
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                } else {
+                    // Legacy checkpoints have no physical skills: never reuse newer,
+                    // potentially unsaved skill data from the working directory.
+                    Files.deleteIfExists(physicalSkillsFile());
+                }
+                physicalSkills = null;
             }
             if (generation != null) GenerationCheckpointStore.restoreMemories(generation,
                 FabricLoader.getInstance().getGameDir().resolve("config/doppelganger/memories"));
