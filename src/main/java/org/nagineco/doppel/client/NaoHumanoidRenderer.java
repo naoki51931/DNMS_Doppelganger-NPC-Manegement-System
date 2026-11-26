@@ -14,7 +14,7 @@ public final class NaoHumanoidRenderer extends LivingEntityRenderer<ArmorStandEn
         super(context, new NaoPlayerModel(context.getPart(slim ? EntityModelLayers.PLAYER_SLIM : EntityModelLayers.PLAYER), slim), 0.5F);
     }
 
-    static java.util.UUID skinOwner(ArmorStandEntity entity) {
+    public static java.util.UUID skinOwner(ArmorStandEntity entity) {
         if (entity.getCustomName() == null) return null;
         String marker = entity.getCustomName().getStyle().getInsertion();
         if (marker == null) return null;
@@ -29,7 +29,7 @@ public final class NaoHumanoidRenderer extends LivingEntityRenderer<ArmorStandEn
 
     private static final java.util.Map<java.util.UUID, net.minecraft.client.util.SkinTextures> CACHE = new java.util.LinkedHashMap<>(16, 0.75f, true);
 
-    static net.minecraft.client.util.SkinTextures skin(ArmorStandEntity entity) {
+    public static net.minecraft.client.util.SkinTextures skin(ArmorStandEntity entity) {
         java.util.UUID skinOwner = skinOwner(entity);
         if (skinOwner == null) skinOwner = entity.getUuid();
         var network = net.minecraft.client.MinecraftClient.getInstance().getNetworkHandler();
