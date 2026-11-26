@@ -1503,6 +1503,15 @@ public class DoppelgangerMod implements ModInitializer {
                         return 0;
                     })));
         }
+        // Opt-in render fixture, restricted to an operator in a disposable world.
+        if (Boolean.getBoolean("dnms.render.fixture")) {
+            CommandRegistrationCallback.EVENT.register((dispatcher, registry, environment) ->
+                dispatcher.register(literal("dnms_render_fixture")
+                    .requires(source -> source.hasPermissionLevel(4) && source.getEntity() instanceof ServerPlayerEntity)
+                    .then(argument("count", IntegerArgumentType.integer(0, 256))
+                        .executes(context -> RenderFixture.replace(context.getSource(),
+                            IntegerArgumentType.getInteger(context, "count"))))));
+        }
         // Dedicated CI smoke command: opt-in, console-only, never enabled in normal play.
         if (Boolean.getBoolean("dnms.ci.smoke")) {
             CommandRegistrationCallback.EVENT.register((dispatcher, registry, environment) ->
