@@ -6,6 +6,8 @@ import org.nagineco.doppel.core.DnmsWorldApi;
 /** Atomic observed population snapshot, scoped by an explicitly selected world UUID. */
 public final class PopulationRegistry {
  private PopulationRegistry(){}
+ public static void captureTimeline(Path root,UUID worldId,UUID epoch,DnmsWorldApi world)throws IOException{capture(root.resolve(epoch.toString()),worldId,world);}
+
  public static void capture(Path root,UUID worldId,DnmsWorldApi world)throws IOException{
   Path dir=root.toAbsolutePath().resolve(worldId.toString());
   Files.createDirectories(dir);
@@ -20,7 +22,7 @@ public final class PopulationRegistry {
     out.append(slot).append(',').append(npc.id()).append('\n');
    }
    var tmp=Files.createTempFile(dir,"registry-",".tmp");
-   try{Files.writeString(tmp,out);Files.move(tmp,dir.resolve("population.csv"),StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING);}
+   try{Files.writeString(tmp,out);try(var durable=java.nio.channels.FileChannel.open(tmp,StandardOpenOption.WRITE)){durable.force(true);}Files.move(tmp,dir.resolve("population.csv"),StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING);}
    finally{Files.deleteIfExists(tmp);}
   }
  }
