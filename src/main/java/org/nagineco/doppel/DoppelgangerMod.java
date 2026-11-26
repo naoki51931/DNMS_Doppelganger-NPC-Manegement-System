@@ -246,6 +246,41 @@ public class DoppelgangerMod implements ModInitializer {
         catch (IOException ex) { report("Bootstrap checkpoint failed: " + ex.getMessage()); }
         return dashboard(src);
     }
+    /** Owner-authorized adapter, usable only on the Minecraft server thread. */
+    public static org.nagineco.doppel.core.DnmsWorldApi minecraftWorldApi(ServerCommandSource src) {
+        if (!src.getServer().isOnThread() || !isOwner(src))
+            throw new IllegalStateException("Owner on server thread required");
+        return new org.nagineco.doppel.core.DnmsWorldApi() {
+            private void check() {
+                if (!src.getServer().isOnThread() || !isOwner(src) || !recording || !freePlay || world == null || life == null)
+                    throw new IllegalStateException("Active owner free-play session required");
+            }
+            @Override public SpawnResult spawnNpc(UUID id, Position position) {
+                check();
+                java.util.Objects.requireNonNull(id);
+                java.util.Objects.requireNonNull(position);
+                for (int i=0;i<life.count();i++)
+                    if (id.equals(UUID.fromString(life.get(i).id))) return SpawnResult.ALREADY_EXISTS;
+                if (tracks.size() >= configuredMaxNaos) return SpawnResult.CAPACITY;
+                // Existing lifecycle allocates its own UUID. Do not silently substitute it.
+                return SpawnResult.UNSUPPORTED;
+            }
+            @Override public List<Npc> npcs() {
+                check();
+                var result = new ArrayList<Npc>();
+                for (int i=0;i<Math.min(life.count(),ghosts.size());i++) {
+                    var stand=ghosts.get(i);
+                    if (stand.isRemoved()) continue;
+                    var p=stand.getBlockPos();
+                    result.add(new Npc(UUID.fromString(life.get(i).id),
+                        new Position(p.getX(),p.getY(),p.getZ()),stand.getHealth()));
+                }
+                return List.copyOf(result);
+            }
+            @Override public long worldTick() { check(); return world.getTime(); }
+        };
+    }
+
     private static int addNaos(ServerCommandSource src, int amount) {
         if (!recording || !freePlay || life == null || world == null || memories == null)
             return say(src, "Start a free-play session first with /doppel dashboard bootstrap.");
