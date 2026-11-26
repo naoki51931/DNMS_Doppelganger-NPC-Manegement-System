@@ -10,15 +10,18 @@ public final class SharedMemorySearch {
  private final List<Event> events=new ArrayList<>();
  private final Map<String,BitSet> index=new HashMap<>();
  private static final Map<String,String> ALIASES=Map.ofEntries(Map.entry("採集","COLLECT"),Map.entry("建築","BUILD"),Map.entry("探索","EXPLORE"),Map.entry("安全","SAFETY"),Map.entry("交流","SOCIAL"),Map.entry("恐怖","AFRAID"),Map.entry("北","NORTH"),Map.entry("南","SOUTH"),Map.entry("東","EAST"),Map.entry("西","WEST"));
- public SharedMemorySearch(Path file)throws IOException{
+ public SharedMemorySearch(Path file)throws IOException{this(file,false);}
+ public SharedMemorySearch(Path file,boolean integratedOnly)throws IOException{
   if(!Files.exists(file))return;
-  try(var reader=Files.newBufferedReader(file)){String line;while((line=reader.readLine())!=null){
+  try(var reader=Files.newBufferedReader(file)){String line;boolean inEvents=false;while((line=reader.readLine())!=null){
+   if(integratedOnly){if(line.equals("## Integrated events")){inEvents=true;continue;}if(inEvents&&line.startsWith("## "))break;if(!inEvents)continue;}
    var m=EVENT.matcher(line);if(!m.matches())continue;
-   var e=new Event(Integer.parseInt(m.group(1)),Integer.parseInt(m.group(2)),Integer.parseInt(m.group(3)),m.group(4),m.group(5),m.group(6),m.group(7));
+   Event e;try{e=new Event(Integer.parseInt(m.group(1)),Integer.parseInt(m.group(2)),Integer.parseInt(m.group(3)),m.group(4),m.group(5),m.group(6),m.group(7));}catch(NumberFormatException ex){continue;}
    int id=events.size();events.add(e);
    for(String key:List.of(e.action(),e.emotion(),e.reason()))index.computeIfAbsent(key,k->new BitSet()).set(id);
   }}
  }
+ public List<Event> events(){return List.copyOf(events);}
  public List<Event> hazardEvents(){
   var unique=new LinkedHashMap<DnmsWorldApi.Position,Event>();
   for(var e:events){
