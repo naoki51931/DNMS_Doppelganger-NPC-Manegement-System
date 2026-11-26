@@ -26,11 +26,16 @@ public final class DnmsWorldHttpApi {
   try(var body=e.getResponseBody()){body.write(bytes);}
  }
  public static void register(HttpServer server,String token,java.util.function.Supplier<String> snapshot,Spawn spawn){
+  register(server,token,snapshot,spawn,null);
+ }
+ public static void register(HttpServer server,String token,java.util.function.Supplier<String> snapshot,Spawn spawn,UUID worldId){
   if(token==null||token.length()<32)return;
   server.createContext("/api/v1/npcs",e->{
    if(!e.getRequestURI().getPath().equals("/api/v1/npcs")){json(e,404,"{}");return;}
    String auth=e.getRequestHeaders().getFirst("Authorization");
    if(auth==null||!java.security.MessageDigest.isEqual(auth.getBytes(StandardCharsets.UTF_8),("Bearer "+token).getBytes(StandardCharsets.UTF_8))){json(e,401,"{}");return;}
+   String expected=e.getRequestHeaders().getFirst("X-DNMS-World");
+   if(expected!=null&&(worldId==null||!worldId.toString().equals(expected))){json(e,409,"{}");return;}
    if(e.getRequestMethod().equals("GET")){json(e,200,snapshot.get());return;}
    if(!e.getRequestMethod().equals("POST")){json(e,405,"{}");return;}
    try{
