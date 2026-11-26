@@ -11,7 +11,7 @@ import net.minecraft.util.Identifier;
 /** Visual adapter only: the server continues to own NPC simulation. */
 public final class NaoHumanoidRenderer extends LivingEntityRenderer<ArmorStandEntity, PlayerEntityModel<ArmorStandEntity>> {
     public NaoHumanoidRenderer(EntityRendererFactory.Context context, boolean slim) {
-        super(context, new PlayerEntityModel<>(context.getPart(slim ? EntityModelLayers.PLAYER_SLIM : EntityModelLayers.PLAYER), slim), 0.5F);
+        super(context, new NaoPlayerModel(context.getPart(slim ? EntityModelLayers.PLAYER_SLIM : EntityModelLayers.PLAYER), slim), 0.5F);
     }
 
     static java.util.UUID skinOwner(ArmorStandEntity entity) {
