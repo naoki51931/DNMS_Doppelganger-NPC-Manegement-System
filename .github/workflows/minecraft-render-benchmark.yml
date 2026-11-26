@@ -21,7 +21,7 @@ jobs:
       - name: Prepare graphical environment and server
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb xauth xdotool imagemagick libgl1-mesa-dri libglx-mesa0 libopenal1
+          sudo apt-get install -y xvfb xauth xdotool imagemagick libgl1-mesa-dri libglx-mesa0 libopenal1 flite1-dev
           gradle --no-daemon remapJar
           mkdir -p benchmark-server/mods benchmark-results run
           cp build/libs/doppelganger-npc-system-0.1.0.jar benchmark-server/mods/
@@ -56,10 +56,14 @@ jobs:
           done
           grep -Eq 'Done \([0-9.]+s\)!' benchmark-results/server.log
           printf '%s\n' 'gamerule doMobSpawning false' 'time set day' 'weather clear' >&3
-          JAVA_TOOL_OPTIONS=-Ddnms.render.metrics=true gradle --no-daemon runClient --args='--username DNMSBenchmark --quickPlayMultiplayer 127.0.0.1:25565' > benchmark-results/client.log 2>&1 &
+          printf 'onboardAccessibility:false\nnarrator:0\nrenderDistance:5\n' > run/options.txt
+          JAVA_TOOL_OPTIONS=-Ddnms.render.metrics=true gradle --no-daemon runClient --args='--username DNMSBenchmark --quickPlayPath quickplay/log.json --quickPlayMultiplayer 127.0.0.1:25565' > benchmark-results/client.log 2>&1 &
           client_pid=$!
           for i in $(seq 1 120); do
             grep -q 'DNMSBenchmark joined the game' benchmark-results/server.log && break
+            if [ "$i" -eq 30 ]; then
+              import -window root benchmark-results/connect-progress.png || true
+            fi
             if grep -Eq 'IllegalClassLoadError|Mixin transformation .* failed|MixinTransformerError|InvalidInjectionException|Crash report saved' benchmark-results/client.log; then
               tail -150 benchmark-results/client.log
               exit 1
