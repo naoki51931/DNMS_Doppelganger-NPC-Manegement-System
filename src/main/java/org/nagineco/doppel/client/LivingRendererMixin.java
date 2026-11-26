@@ -13,7 +13,9 @@ public abstract class LivingRendererMixin {
     @Inject(method = "render(Lnet/minecraft/entity/LivingEntity;FFLnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumerProvider;I)V", at = @At("HEAD"), cancellable = true)
     private void dnms$render(LivingEntity entity, float yaw, float delta, MatrixStack matrices, VertexConsumerProvider vertices, int light, CallbackInfo ci) {
         if ((Object)this instanceof NaoRendererAccess access && entity instanceof ArmorStandEntity stand && NaoHumanoidRenderer.skinOwner(stand) != null) {
+            long started = NaoRenderMetrics.begin();
             access.dnms$render(stand, yaw, delta, matrices, vertices, light);
+            NaoRenderMetrics.end(stand.getUuid(), started);
             ci.cancel();
         }
     }
