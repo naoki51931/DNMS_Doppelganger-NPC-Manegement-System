@@ -9,6 +9,10 @@ public final class SpawnLedger {
  private final Path file;
  public SpawnLedger(Path file){this.file=file.toAbsolutePath();}
  public DnmsWorldApi.SpawnResult next(DnmsWorldApi world)throws IOException{
+  return next(world,()->{});
+ }
+ @FunctionalInterface public interface Commit {void run()throws IOException;}
+ public DnmsWorldApi.SpawnResult next(DnmsWorldApi world,Commit commit)throws IOException{
   Files.createDirectories(file.getParent());
   try(var channel=java.nio.channels.FileChannel.open(file.resolveSibling(file.getFileName()+".lock"),StandardOpenOption.CREATE,StandardOpenOption.WRITE);var lock=channel.lock()){
    var ids=world.npcs();
@@ -26,7 +30,7 @@ public final class SpawnLedger {
     try{Files.writeString(tmp,id+","+slot);Files.move(tmp,file,StandardCopyOption.ATOMIC_MOVE);}finally{Files.deleteIfExists(tmp);}
    }
    var result=world.spawnNpc(id,WorldIdentityPolicy.anchor(slot));
-   if(result==DnmsWorldApi.SpawnResult.CREATED||result==DnmsWorldApi.SpawnResult.ALREADY_EXISTS)Files.delete(file);
+   if(result==DnmsWorldApi.SpawnResult.CREATED||result==DnmsWorldApi.SpawnResult.ALREADY_EXISTS){commit.run();Files.delete(file);}
    return result;
   }
  }
