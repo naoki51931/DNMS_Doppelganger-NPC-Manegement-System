@@ -10,6 +10,6 @@ public final class CheckpointPolicy {
  public static void publish(Path pointer,String id)throws IOException{
   if(!valid(id))throw new IOException("Invalid generation");
   var tmp=Files.createTempFile(pointer.toAbsolutePath().getParent(),"generation-",".tmp");
-  try{Files.writeString(tmp,id);Files.move(tmp,pointer,StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING);}finally{Files.deleteIfExists(tmp);}
+  try{Files.writeString(tmp,id);try(var channel=java.nio.channels.FileChannel.open(tmp,StandardOpenOption.WRITE)){channel.force(true);}Files.move(tmp,pointer,StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING);}finally{Files.deleteIfExists(tmp);}
  }
 }
