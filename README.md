@@ -557,3 +557,12 @@ DNMSの standalone はFabric非依存のCLI接続モジュール。Java 21、Gra
 - 移動・採集・建築・保存・巻き戻しAPIと両Adapter実装。
 - 接続先選択・設定保存、世界ID、個体転送、障害時の整合性・再接続。
 - Minecraft既存AIとの統合、長期負荷試験、無料公開。
+
+
+## 世界ID・生成要求・個体台帳の連携
+DNMS standalone の `next-world root [expected-world-uuid]` は認証APIで世界IDを取得し、世界別 spawn.pending を使用して生成後 population.csv を更新する。旧 next は互換用。世界IDの前後照合は行うが、サーバー側の原子的な世界ID条件付き生成ではない。
+
+### 今後の実装
+- 世界ID条件付き生成・生成と保存の一貫性・台帳自動復元・初期24人の管理権限統合。
+- 世界保存・巻き戻し制御の共通化、既存セーブ互換性、実接続・回帰・256人負荷テスト。
+- CI未確認。共通コアへの移管は独立DNMS実行時の完全統合を意味しない。
