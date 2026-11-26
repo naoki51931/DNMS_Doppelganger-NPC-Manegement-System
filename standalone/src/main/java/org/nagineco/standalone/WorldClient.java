@@ -8,6 +8,8 @@ import java.util.*;
 import java.io.*;
 public final class WorldClient implements DnmsWorldApi {
  private final URI uri; private final String token;
+ private UUID expectedWorld;
+ public void bindWorld(UUID id){expectedWorld=Objects.requireNonNull(id);}
  private final HttpClient client=HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
  private final Gson gson=new Gson();
  public record Snapshot(long tick,List<Npc> npcs){}
@@ -20,6 +22,7 @@ public final class WorldClient implements DnmsWorldApi {
  }
  private HttpResponse<String> request(String body){
   var b=HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(10)).header("Authorization","Bearer "+token);
+  if(expectedWorld!=null)b.header("X-DNMS-World",expectedWorld.toString());
   try{return client.send(body==null?b.GET().build():b.POST(HttpRequest.BodyPublishers.ofString(body)).build(),HttpResponse.BodyHandlers.ofString());}
   catch(IOException e){throw new UncheckedIOException(e);}catch(InterruptedException e){Thread.currentThread().interrupt();throw new IllegalStateException(e);}
  }
