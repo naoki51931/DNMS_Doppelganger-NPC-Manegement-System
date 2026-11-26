@@ -262,8 +262,30 @@ public class DoppelgangerMod implements ModInitializer {
                 for (int i=0;i<life.count();i++)
                     if (id.equals(UUID.fromString(life.get(i).id))) return SpawnResult.ALREADY_EXISTS;
                 if (tracks.size() >= configuredMaxNaos) return SpawnResult.CAPACITY;
-                // Existing lifecycle allocates its own UUID. Do not silently substitute it.
-                return SpawnResult.UNSUPPORTED;
+                // Restrict to the existing session's spawn anchor until arbitrary placement is validated.
+                if (dawn == null || position.x()!=dawn.getX() || position.y()!=dawn.getY() || position.z()!=dawn.getZ())
+                    return SpawnResult.INVALID_POSITION;
+                if (memories == null || life.count()!=tracks.size() || brains.size()!=tracks.size())
+                    return SpawnResult.UNSUPPORTED;
+                int slot=tracks.size();
+                try {
+                    HabitBrain brain=new HabitBrain();
+                    memories.restore(slot,brain);
+                    memories.restoreRewards(slot,brain);
+                    var n=life.appendWithId(id);
+                    tracks.add(new ArrayList<>(List.of(Vec3d.ofCenter(dawn))));
+                    brains.add(brain);
+                    life.save();
+                    if (people!=null) { people.add(n.id,"Nao_"+n.number,"NAO"); people.save(); }
+                    spawnGhosts();
+                    saveSession();
+                    if (slot>=ghosts.size() || ghosts.get(slot).isRemoved())
+                        throw new IllegalStateException("NPC body missing after spawn");
+                    return SpawnResult.CREATED;
+                } catch (IOException ex) {
+                    // Persistence may have partially succeeded: never report a successful spawn.
+                    throw new java.io.UncheckedIOException("NPC creation requires session recovery",ex);
+                }
             }
             @Override public List<Npc> npcs() {
                 check();
