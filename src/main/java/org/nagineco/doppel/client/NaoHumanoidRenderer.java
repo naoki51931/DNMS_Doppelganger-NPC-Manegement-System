@@ -2,16 +2,16 @@ package org.nagineco.doppel.client;
 
 import net.minecraft.client.render.entity.EntityRendererFactory;
 import net.minecraft.client.render.entity.LivingEntityRenderer;
-import net.minecraft.client.render.entity.model.BipedEntityModel;
+import net.minecraft.client.render.entity.model.PlayerEntityModel;
 import net.minecraft.client.render.entity.model.EntityModelLayers;
 import net.minecraft.client.util.DefaultSkinHelper;
 import net.minecraft.entity.decoration.ArmorStandEntity;
 import net.minecraft.util.Identifier;
 
 /** Visual adapter only: the server continues to own NPC simulation. */
-public final class NaoHumanoidRenderer extends LivingEntityRenderer<ArmorStandEntity, BipedEntityModel<ArmorStandEntity>> {
-    public NaoHumanoidRenderer(EntityRendererFactory.Context context) {
-        super(context, new BipedEntityModel<>(context.getPart(EntityModelLayers.PLAYER)), 0.5F);
+public final class NaoHumanoidRenderer extends LivingEntityRenderer<ArmorStandEntity, PlayerEntityModel<ArmorStandEntity>> {
+    public NaoHumanoidRenderer(EntityRendererFactory.Context context, boolean slim) {
+        super(context, new PlayerEntityModel<>(context.getPart(slim ? EntityModelLayers.PLAYER_SLIM : EntityModelLayers.PLAYER), slim), 0.5F);
     }
 
     static java.util.UUID skinOwner(ArmorStandEntity entity) {
@@ -27,15 +27,23 @@ public final class NaoHumanoidRenderer extends LivingEntityRenderer<ArmorStandEn
         } catch (IllegalArgumentException ex) { return null; }
     }
 
-    @Override
-    public Identifier getTexture(ArmorStandEntity entity) {
+    private static final java.util.Map<java.util.UUID, net.minecraft.client.util.SkinTextures> CACHE = new java.util.LinkedHashMap<>(16, 0.75f, true);
+
+    static net.minecraft.client.util.SkinTextures skin(ArmorStandEntity entity) {
         java.util.UUID skinOwner = skinOwner(entity);
         if (skinOwner == null) skinOwner = entity.getUuid();
         var network = net.minecraft.client.MinecraftClient.getInstance().getNetworkHandler();
         if (network != null) {
             var entry = network.getPlayerListEntry(skinOwner);
-            if (entry != null) return entry.getSkinTextures().texture();
+            if (entry != null) {
+                var skin = entry.getSkinTextures();
+                CACHE.put(skinOwner, skin);
+                if (CACHE.size() > 256) CACHE.remove(CACHE.keySet().iterator().next());
+                return skin;
+            }
         }
-        return DefaultSkinHelper.getSkinTextures(skinOwner).texture();
+        return CACHE.getOrDefault(skinOwner, DefaultSkinHelper.getSkinTextures(skinOwner));
     }
+    @Override
+    public Identifier getTexture(ArmorStandEntity entity) { return skin(entity).texture(); }
 }
