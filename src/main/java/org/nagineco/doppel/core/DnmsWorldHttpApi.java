@@ -35,7 +35,7 @@ public final class DnmsWorldHttpApi {
    String auth=e.getRequestHeaders().getFirst("Authorization");
    if(auth==null||!java.security.MessageDigest.isEqual(auth.getBytes(StandardCharsets.UTF_8),("Bearer "+token).getBytes(StandardCharsets.UTF_8))){json(e,401,"{}");return;}
    String expected=e.getRequestHeaders().getFirst("X-DNMS-World");
-   if(expected!=null&&(worldId==null||!worldId.toString().equals(expected))){json(e,409,"{}");return;}
+   if((worldId!=null&&!worldId.toString().equals(expected))||(worldId==null&&expected!=null)){json(e,409,"{}");return;}
    if(e.getRequestMethod().equals("GET")){json(e,200,snapshot.get());return;}
    if(!e.getRequestMethod().equals("POST")){json(e,405,"{}");return;}
    try{
