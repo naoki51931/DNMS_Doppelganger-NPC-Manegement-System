@@ -2181,7 +2181,11 @@ public class DoppelgangerMod implements ModInitializer {
             stand.equipStack(EquipmentSlot.FEET, new ItemStack(Items.LEATHER_BOOTS));
             stand.setCustomName(Text.literal("Doppel " + (i+1)));
             stand.setCustomNameVisible(true);
-            world.spawnEntity(stand);
+            if (!world.spawnEntity(stand)) {
+                String message = "NPC body spawn failed for Doppel " + (i + 1);
+                LOG.severe(message);
+                throw new IllegalStateException(message);
+            }
             if (i < ghosts.size()) ghosts.set(i, stand);
             else ghosts.add(stand);
         }
