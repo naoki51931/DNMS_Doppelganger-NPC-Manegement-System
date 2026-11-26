@@ -14,7 +14,7 @@ public final class Main {
     if(!client.sameIdentity())throw new IllegalStateException("World timeline changed");
     var result=new SpawnLedger(root.resolve(id.toString()).resolve(client.epoch().toString()).resolve("spawn.pending")).next(client,()->{
      if(!client.sameIdentity())throw new IllegalStateException("World changed during request; inspect server state");
-     PopulationRegistry.capture(root,id,client);
+     PopulationRegistry.captureTimeline(root,id,client.epoch(),client);
     });
     System.out.println(result);
     if(result!=org.nagineco.doppel.core.DnmsWorldApi.SpawnResult.CREATED&&result!=org.nagineco.doppel.core.DnmsWorldApi.SpawnResult.ALREADY_EXISTS)System.exit(2);
@@ -22,7 +22,7 @@ public final class Main {
    }catch(java.io.IOException e){throw new java.io.UncheckedIOException(e);}
   }
   if(args.length==2&&args[0].equals("next")){throw new IllegalArgumentException("Use next-world root; legacy ledger is not world-scoped");}
-  if((args.length==2||args.length==3)&&args[0].equals("registry")){try{var id=client.worldId();if(args.length==3&&!id.equals(UUID.fromString(args[2])))throw new IllegalArgumentException("World UUID mismatch");if(!client.sameIdentity())throw new IllegalStateException("World timeline changed");PopulationRegistry.capture(java.nio.file.Path.of(args[1]),id,client);return;}catch(java.io.IOException e){throw new java.io.UncheckedIOException(e);}}
+  if((args.length==2||args.length==3)&&args[0].equals("registry")){try{var id=client.worldId();if(args.length==3&&!id.equals(UUID.fromString(args[2])))throw new IllegalArgumentException("World UUID mismatch");if(!client.sameIdentity())throw new IllegalStateException("World timeline changed");PopulationRegistry.captureTimeline(java.nio.file.Path.of(args[1]),id,client.epoch(),client);return;}catch(java.io.IOException e){throw new java.io.UncheckedIOException(e);}}
   throw new IllegalArgumentException("list | spawn UUID x y z | next-world root [expected-world-uuid] | registry root [expected-world-uuid]");
  }
 }
