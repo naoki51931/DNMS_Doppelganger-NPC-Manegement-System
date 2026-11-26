@@ -1,0 +1,11 @@
+{
+  "required": true,
+  "package": "org.nagineco.doppel.client",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "ArmorStandRendererMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
