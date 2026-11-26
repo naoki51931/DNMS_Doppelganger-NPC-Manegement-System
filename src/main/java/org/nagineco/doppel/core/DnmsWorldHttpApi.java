@@ -29,6 +29,9 @@ public final class DnmsWorldHttpApi {
   register(server,token,snapshot,spawn,null);
  }
  public static void register(HttpServer server,String token,java.util.function.Supplier<String> snapshot,Spawn spawn,UUID worldId){
+  register(server,token,snapshot,spawn,worldId,null,null);
+ }
+ public static void register(HttpServer server,String token,java.util.function.Supplier<String> snapshot,Spawn spawn,UUID worldId,Object mutex,java.util.function.Supplier<UUID> epoch){
   if(token==null||token.length()<32)return;
   server.createContext("/api/v1/npcs",e->{
    if(!e.getRequestURI().getPath().equals("/api/v1/npcs")){json(e,404,"{}");return;}
@@ -36,7 +39,7 @@ public final class DnmsWorldHttpApi {
    if(auth==null||!java.security.MessageDigest.isEqual(auth.getBytes(StandardCharsets.UTF_8),("Bearer "+token).getBytes(StandardCharsets.UTF_8))){json(e,401,"{}");return;}
    String expected=e.getRequestHeaders().getFirst("X-DNMS-World");
    if((worldId!=null&&!worldId.toString().equals(expected))||(worldId==null&&expected!=null)){json(e,409,"{}");return;}
-   if(e.getRequestMethod().equals("GET")){json(e,200,snapshot.get());return;}
+   if(e.getRequestMethod().equals("GET")){synchronized(mutex==null?e:mutex){if(epoch!=null&&!epoch.get().toString().equals(e.getRequestHeaders().getFirst("X-DNMS-Epoch"))){json(e,409,"{}");return;}json(e,200,snapshot.get());}return;}
    if(!e.getRequestMethod().equals("POST")){json(e,405,"{}");return;}
    try{
     byte[] body=e.getRequestBody().readNBytes(129);
@@ -44,7 +47,10 @@ public final class DnmsWorldHttpApi {
     String[] p=new String(body,StandardCharsets.UTF_8).split(",",-1);
     if(p.length!=4)throw new IllegalArgumentException("spawn");
     UUID id=UUID.fromString(p[0]);if(!id.toString().equalsIgnoreCase(p[0]))throw new IllegalArgumentException("uuid");
-    var result=spawn.apply(id,new DnmsWorldApi.Position(Integer.parseInt(p[1]),Integer.parseInt(p[2]),Integer.parseInt(p[3])));
+    DnmsWorldApi.SpawnResult result;
+    synchronized(mutex==null?e:mutex){if(epoch!=null&&!epoch.get().toString().equals(e.getRequestHeaders().getFirst("X-DNMS-Epoch"))){json(e,409,"{}");return;}
+    result=spawn.apply(id,new DnmsWorldApi.Position(Integer.parseInt(p[1]),Integer.parseInt(p[2]),Integer.parseInt(p[3])));}
+
     int code=switch(result){case CREATED->201;case ALREADY_EXISTS,CAPACITY->409;case INVALID_POSITION->400;case UNSUPPORTED->501;};
     json(e,code,"{\"result\":\""+result+"\"}");
    }catch(IllegalArgumentException ex){json(e,400,"{}");}catch(java.io.IOException ex){json(e,500,"{}");}
