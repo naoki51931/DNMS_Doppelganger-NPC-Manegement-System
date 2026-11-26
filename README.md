@@ -6,7 +6,7 @@
 
 ## Minecraft版 DNMS の導入方法
 
-Minecraft Java Edition 1.21.1 専用の実験的な Fabric サーバーMODです。統合版（Bedrock）、Forge、NeoForge向けではありません。Android/iPhoneは公式対応外です。スマートフォンで試す場合は [DNMS-World無料体験版](https://naoki51931.github.io/DNMS-World/)（Pages公開後）をご利用ください。
+Minecraft Java Edition 1.21.1 専用の実験的な Fabric MODです。統合版（Bedrock）、Forge、NeoForge向けではありません。Android/iPhoneは公式対応外です。スマートフォンで試す場合は [DNMS-World無料体験版](https://naoki51931.github.io/DNMS-World/)（Pages公開後）をご利用ください。
 
 ### 必要なもの
 - [Minecraft Java Edition](https://www.minecraft.net/download) 1.21.1
@@ -14,6 +14,20 @@ Minecraft Java Edition 1.21.1 専用の実験的な Fabric サーバーMODです
 - [Fabric Server Launcher](https://fabricmc.net/use/server/)（Minecraft 1.21.1を選択）
 - [Fabric API](https://modrinth.com/mod/fabric-api)（1.21.1 / Fabric対応版）
 - 自分でMODをビルドする場合：[Git](https://git-scm.com/downloads)、[Gradle 8.x](https://gradle.org/install/)
+
+## 人間型NPCの表示（Minecraft 1.21.1）
+
+サーバーとクライアントの両方に同じDNMS JARとFabric APIを導入してください。クライアントは [Fabric Installer](https://fabricmc.net/use/installer/) で1.21.1のプロファイルを作り、そのゲームディレクトリの mods にJARを配置します。MODなしのクライアントでは従来の防具立て表示になります。
+
+DNMS専用の識別情報を持つNPCのみ、通常型またはスリム型のプレイヤーモデルで描画します。内部エンティティは防具立てのままで、既存のAI・記憶・個体管理を維持します。元プレイヤーのスキンを参照し、手足の同期姿勢をモデルに適用します。署名付きスキン情報はクライアントの config/doppelganger/client-skins/ に保存し、再起動時に復元を試みます。完全オフラインでの画像復元は保証しません。
+
+### 検証手順
+1. ワールドをバックアップし、Fabricクライアントで接続する。
+2. NPCを24人生成し、全身・スキン・衣服・歩行・通常の防具立てを確認する。
+3. オーナーのログアウトとクライアント再起動後の表示を確認する。
+4. 24、64、128、256人で同じ描画距離・解像度を使用し、FPS、フレーム時間、メモリ、サーバーTPSを記録する。
+
+修正コミット d7945b7 のFabric build verificationとMinecraft Fabric server smoke testは成功。クライアント実機の描画と256人描画負荷は未検証です。
 
 <a name="install-win"></a>
 
