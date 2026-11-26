@@ -1,5 +1,13 @@
 # AGENTS.md — Doppel NPC Management System (DNMS)
 
+## Human NPC rendering / 人間型NPC描画 (2026-11-26)
+
+- Client-only rendering hooks must not load client classes on a dedicated server. Keep the existing server simulation and stable logical IDs intact.
+- The visual adapter uses a marked armor stand, owner UUID, normal/slim player model and synchronized limb pose; it is not a real player entity.
+- Signed texture profile persistence is client-local, not part of the world checkpoint. Missing or failed skin resolution falls back to a default skin. Do not claim fully offline texture recovery.
+- Build and dedicated server smoke tests passed at d7945b7. Client launch, actual rendering and 24/64/128/256 visible NPC performance require separate verification. Do not equate server CI with client rendering success.
+- 人間型描画にはクライアントにもDNMSが必要。通常の防具立てを変更せず、記憶・AI・個体IDを維持すること。
+
 ## 日本語：記憶想起・人物台帳・自律計画（2026-11-21）
 - `/doppel recall <slot> <topic>` は各奈央の個別記憶ファイル（MIP複製済みの他者エピソードを含む）をキーワード検索し、出典付きの一致行を返す。生活AIは長期目標をキーワードとして定期的に記憶を想起し、`lastRecalledMemory` に保持する。**これはルールベースのエピソード検索であり、LLMによる自由な意味理解や会話生成ではない。**
 - `/doppel person add <id>`、`person relate <from> <to> <role>`、`person event <from> <to> <detail>`、`person status <id>`。外部人物と奈央（`nao_1`〜`nao_256`）の人物台帳を `config/doppelganger/people.json` に保存する。関係ラベル：FRIEND, FAMILY, COLLEAGUE, PARTNER, SPOUSE, PARENT, CHILD, HOUSEMATE。相互関係と親子の逆関係を自動登録し、共有イベントを両者へ記録する。結婚式・育児・同居の物理行動は未実装。
