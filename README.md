@@ -537,3 +537,7 @@ Historical note: these changes were unverified when this section was written; co
 - **MIP defaults to Minecraft 00:00 (tick 18000), with configurable HH:mm**. Valid custom `mip.time` values are loaded. `/doppel mip time HH:mm` accepts valid 24-hour Minecraft times. Natural midnight crossing invokes the existing memory integration. Manual `/doppel mip run` and enabling MIP can still trigger an immediate integration; these are explicit/manual exceptions. This does **not** change per-record weights: all experiences retain weight 1.0, so prolific Naos can still contribute more records. A time skip over midnight may skip integration, as before.
 - **Nao continuity during growth:** `spawnGhosts()` no longer destroys and recreates every existing stand-in when another Nao is added. Living stands retain their entity and current position; missing/removed stands are recreated for the same slot using their last available position. The logical Nao UUID and saved journals are unchanged. Explicit `/doppel stop` still removes the temporary stand-ins and `/doppel resume` recreates them from saved tracks; **permanent entity persistence, independent position checkpoints, and protection from every kind of disappearance are not yet implemented**.
 - In-game verification remains pending.
+
+
+## 共通World HTTP APIの責務分離
+DNMS本体の `org.nagineco.doppel.core.DnmsWorldHttpApi` をHTTP認証・入力解析・JSON応答の唯一の実装元とする。DNMS-Worldはハッシュ検証付きで取得し、旧HTTP実装をDNMS-LEGACYコメントとして無効化する。世界固有の生成・座標・同期・記憶ジャーナル準備はAdapterに残す。Minecraft側HTTP公開、DNMS側クライアント、管理権限一本化、CI検証は今後の実装。
