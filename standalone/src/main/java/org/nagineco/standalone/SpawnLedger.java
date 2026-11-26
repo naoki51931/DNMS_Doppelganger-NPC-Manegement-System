@@ -27,7 +27,7 @@ public final class SpawnLedger {
     slot=ids.size();if(slot>=256)return DnmsWorldApi.SpawnResult.CAPACITY;
     id=WorldIdentityPolicy.issue();
     var tmp=Files.createTempFile(file.getParent(),"spawn-",".tmp");
-    try{Files.writeString(tmp,id+","+slot);Files.move(tmp,file,StandardCopyOption.ATOMIC_MOVE);}finally{Files.deleteIfExists(tmp);}
+    try{Files.writeString(tmp,id+","+slot);try(var durable=java.nio.channels.FileChannel.open(tmp,StandardOpenOption.WRITE)){durable.force(true);}Files.move(tmp,file,StandardCopyOption.ATOMIC_MOVE);}finally{Files.deleteIfExists(tmp);}
    }
    var result=world.spawnNpc(id,WorldIdentityPolicy.anchor(slot));
    if(result==DnmsWorldApi.SpawnResult.CREATED||result==DnmsWorldApi.SpawnResult.ALREADY_EXISTS){commit.run();Files.delete(file);}
