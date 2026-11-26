@@ -23,7 +23,7 @@ public abstract class ArmorStandRendererMixin {
     @Inject(method = "render(Lnet/minecraft/entity/decoration/ArmorStandEntity;FFLnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumerProvider;I)V", at = @At("HEAD"), cancellable = true)
     private void dnms$render(ArmorStandEntity entity, float yaw, float tickDelta, MatrixStack matrices,
                              VertexConsumerProvider vertices, int light, CallbackInfo ci) {
-        if (entity.getCustomName() == null || !java.util.Objects.equals(entity.getCustomName().getStyle().getInsertion(), "dnms:npc:" + entity.getCustomName().getString().replaceFirst("^Doppel ", ""))) return;
+        if (NaoHumanoidRenderer.skinOwner(entity) == null) return;
         dnms$renderer.render(entity, yaw, tickDelta, matrices, vertices, light);
         ci.cancel();
     }
