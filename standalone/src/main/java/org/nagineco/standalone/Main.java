@@ -10,6 +10,7 @@ public final class Main {
    try{
     var root=java.nio.file.Path.of(args[1]);var id=client.worldId();
     if(args.length==3&&!id.equals(UUID.fromString(args[2])))throw new IllegalArgumentException("World UUID mismatch");
+    client.bindWorld(id);
     var result=new SpawnLedger(root.resolve(id.toString()).resolve("spawn.pending")).next(client);
     if(!id.equals(client.worldId()))throw new IllegalStateException("World changed during request; inspect server state");
     PopulationRegistry.capture(root,id,client);
@@ -17,7 +18,7 @@ public final class Main {
    }catch(java.io.IOException e){throw new java.io.UncheckedIOException(e);}
   }
   if(args.length==2&&args[0].equals("next")){try{System.out.println(new SpawnLedger(java.nio.file.Path.of(args[1])).next(client));return;}catch(java.io.IOException e){throw new java.io.UncheckedIOException(e);}}
-  if((args.length==2||args.length==3)&&args[0].equals("registry")){try{var id=client.worldId();if(args.length==3&&!id.equals(UUID.fromString(args[2])))throw new IllegalArgumentException("World UUID mismatch");PopulationRegistry.capture(java.nio.file.Path.of(args[1]),id,client);return;}catch(java.io.IOException e){throw new java.io.UncheckedIOException(e);}}
+  if((args.length==2||args.length==3)&&args[0].equals("registry")){try{var id=client.worldId();if(args.length==3&&!id.equals(UUID.fromString(args[2])))throw new IllegalArgumentException("World UUID mismatch");client.bindWorld(id);PopulationRegistry.capture(java.nio.file.Path.of(args[1]),id,client);return;}catch(java.io.IOException e){throw new java.io.UncheckedIOException(e);}}
   throw new IllegalArgumentException("list | spawn UUID x y z | next ledger-path | next-world root [expected-world-uuid] | registry root [expected-world-uuid]");
  }
 }
