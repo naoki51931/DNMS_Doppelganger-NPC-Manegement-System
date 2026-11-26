@@ -1,0 +1,89 @@
+name: Minecraft NPC render benchmark
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/minecraft-render-benchmark.yml'
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+      - name: Prepare graphical environment and server
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb xauth xdotool imagemagick libgl1-mesa-dri libglx-mesa0 libopenal1
+          gradle --no-daemon remapJar
+          mkdir -p benchmark-server/mods benchmark-results run
+          cp build/libs/doppelganger-npc-system-0.1.0.jar benchmark-server/mods/
+          cd benchmark-server
+          curl -fsSL --retry 3 -o installer.jar https://maven.fabricmc.net/net/fabricmc/fabric-installer/1.0.1/fabric-installer-1.0.1.jar
+          java -jar installer.jar server -mcversion 1.21.1 -loader 0.16.10 -downloadMinecraft
+          curl -fsSL --retry 3 -o mods/fabric-api.jar 'https://maven.fabricmc.net/net/fabricmc/fabric-api/fabric-api/0.110.0+1.21.1/fabric-api-0.110.0+1.21.1.jar'
+          printf 'eula=true\n' > eula.txt
+          printf 'server-ip=127.0.0.1\nserver-port=25565\nonline-mode=false\nlevel-type=minecraft:flat\nview-distance=5\nsimulation-distance=3\nspawn-protection=0\n' > server.properties
+      - name: Run graphical benchmark
+        shell: bash
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          DISPLAY: ':99'
+        run: |
+          set -euo pipefail
+          Xvfb :99 -screen 0 1280x720x24 > benchmark-results/xvfb.log 2>&1 &
+          display_pid=$!
+          cd benchmark-server
+          mkfifo console
+          exec 3<>console
+          java -Ddnms.render.fixture=true -Xmx2G -jar fabric-server-launch.jar nogui <console > ../benchmark-results/server.log 2>&1 &
+          server_pid=$!
+          cd ..
+          trap 'kill "$server_pid" "$display_pid" ${client_pid:-} 2>/dev/null || true' EXIT
+          for i in $(seq 1 180); do
+            grep -Eq 'Done \([0-9.]+s\)!' benchmark-results/server.log && break
+            kill -0 "$server_pid"
+            sleep 1
+          done
+          grep -Eq 'Done \([0-9.]+s\)!' benchmark-results/server.log
+          printf '%s\n' 'gamerule doMobSpawning false' 'time set day' 'weather clear' >&3
+          JAVA_TOOL_OPTIONS=-Ddnms.render.metrics=true gradle --no-daemon runClient --args='--username DNMSBenchmark --quickPlayMultiplayer 127.0.0.1:25565' > benchmark-results/client.log 2>&1 &
+          client_pid=$!
+          for i in $(seq 1 360); do
+            grep -q 'DNMSBenchmark joined the game' benchmark-results/server.log && break
+            kill -0 "$client_pid"
+            sleep 2
+          done
+          grep -q 'DNMSBenchmark joined the game' benchmark-results/server.log
+          printf '%s\n' 'op DNMSBenchmark' 'gamemode creative DNMSBenchmark' 'tp DNMSBenchmark 0 10 0 0 20' >&3
+          sleep 5
+          window=$(xdotool search --onlyvisible --name 'Minecraft' | tail -1)
+          xdotool windowfocus "$window"
+          printf 'requested,distinctNpc,p95CpuUs,maxCpuUs,heapBytes\n' > benchmark-results/metrics.csv
+          for count in 24 64 128 256; do
+            before=$(wc -l < benchmark-results/client.log)
+            xdotool key t
+            sleep 1
+            xdotool type "/dnms_render_fixture $count"
+            xdotool key Return
+            sleep 5
+            printf '%s\n' 'tp DNMSBenchmark 0 19 -8 0 30' >&3
+            sleep 25
+            import -window root "benchmark-results/npc-$count.png"
+            tail -n "+$((before+1))" benchmark-results/client.log > "benchmark-results/npc-$count.log"
+            python3 -c 'import re,sys,csv; n=int(sys.argv[1]); s=open(sys.argv[2]).read(); rows=re.findall(r"distinctNpc=(\d+) p95CpuUs=([\d.]+) maxCpuUs=([\d.]+) heapBytes=(\d+)",s); assert rows,"No successful NPC render calls"; csv.writer(sys.stdout).writerows([[n,*r] for r in rows]); assert max(int(r[0]) for r in rows)>=n,"Not all requested NPCs observed in one sample window"' "$count" "benchmark-results/npc-$count.log" >> benchmark-results/metrics.csv
+            printf '%s\n' 'tp DNMSBenchmark 0 10 0 0 20' >&3
+            sleep 2
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: npc-render-benchmark
+          path: benchmark-results/
