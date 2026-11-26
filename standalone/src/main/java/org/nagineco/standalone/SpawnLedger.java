@@ -18,8 +18,7 @@ public final class SpawnLedger {
     if(parts.length!=2)throw new IOException("Invalid pending spawn");
     id=UUID.fromString(parts[0]);slot=Integer.parseInt(parts[1]);
     if(slot<0||slot>=256)throw new IOException("Invalid slot");
-    if(ids.stream().anyMatch(n->n.id().equals(id))){Files.delete(file);return DnmsWorldApi.SpawnResult.ALREADY_EXISTS;}
-    if(ids.size()!=slot)throw new IOException("Population changed; pending request retained");
+    if(ids.stream().noneMatch(n->n.id().equals(id))&&ids.size()!=slot)throw new IOException("Population changed; pending request retained");
    }else{
     slot=ids.size();if(slot>=256)return DnmsWorldApi.SpawnResult.CAPACITY;
     id=WorldIdentityPolicy.issue();
