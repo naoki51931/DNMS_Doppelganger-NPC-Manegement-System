@@ -391,3 +391,7 @@ Historical note: these changes were unverified when this section was written; co
 
 ## 共通World HTTP APIの責務分離
 DNMS本体の `org.nagineco.doppel.core.DnmsWorldHttpApi` をHTTP認証・入力解析・JSON応答の唯一の実装元とする。DNMS-Worldはハッシュ検証付きで取得し、旧HTTP実装をDNMS-LEGACYコメントとして無効化する。世界固有の生成・座標・同期・記憶ジャーナル準備はAdapterに残す。Minecraft側HTTP公開、DNMS側クライアント、管理権限一本化、CI検証は今後の実装。
+
+
+## 共通AI移管バッチ1
+RewardEstimate、SharedMemorySearch、MemoryDecision の正式実装をDNMS coreに集約。DNMS-Worldの旧実装はDNMS-LEGACYコメントで無効化し、互換Adapterのみ残す。Gradleで3クラスのblob hashを検証して取得する。Minecraft既存RLP・目標選択への統合、世界IDによる危険記憶分離、CI検証は未完了。今後の共通AI変更はDNMS側で実施する。
