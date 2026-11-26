@@ -46,6 +46,7 @@ jobs:
           java -Ddnms.render.fixture=true -Xmx2G -jar fabric-server-launch.jar nogui <console > ../benchmark-results/server.log 2>&1 &
           server_pid=$!
           cd ..
+          trap 'rc=$?; if [ "$rc" -ne 0 ]; then echo "Benchmark failed at line $LINENO"; tail -100 benchmark-results/server.log || true; tail -150 benchmark-results/client.log || true; fi' ERR
           trap 'kill "$server_pid" "$display_pid" ${client_pid:-} 2>/dev/null || true' EXIT
           for i in $(seq 1 180); do
             grep -Eq 'Done \([0-9.]+s\)!' benchmark-results/server.log && break
@@ -56,12 +57,18 @@ jobs:
           printf '%s\n' 'gamerule doMobSpawning false' 'time set day' 'weather clear' >&3
           JAVA_TOOL_OPTIONS=-Ddnms.render.metrics=true gradle --no-daemon runClient --args='--username DNMSBenchmark --quickPlayMultiplayer 127.0.0.1:25565' > benchmark-results/client.log 2>&1 &
           client_pid=$!
-          for i in $(seq 1 360); do
+          for i in $(seq 1 120); do
             grep -q 'DNMSBenchmark joined the game' benchmark-results/server.log && break
             kill -0 "$client_pid"
             sleep 2
           done
-          grep -q 'DNMSBenchmark joined the game' benchmark-results/server.log
+          if ! grep -q 'DNMSBenchmark joined the game' benchmark-results/server.log; then
+            echo 'Client did not join: inspecting client and server logs'
+            import -window root benchmark-results/connect-failure.png || true
+            tail -150 benchmark-results/client.log
+            tail -100 benchmark-results/server.log
+            exit 1
+          fi
           printf '%s\n' 'op DNMSBenchmark' 'gamemode creative DNMSBenchmark' 'tp DNMSBenchmark 0 10 0 0 20' >&3
           sleep 5
           window=$(xdotool search --onlyvisible --name 'Minecraft' | tail -1)
