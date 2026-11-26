@@ -98,6 +98,18 @@ public final class NaoLifeStore {
         }
         return members.get(index);
     }
+    /** Append only: never replace an existing logical identity. */
+    public Nao appendWithId(UUID id) {
+        java.util.Objects.requireNonNull(id);
+        if (members.size() >= 256) throw new IllegalStateException("Nao capacity");
+        for (Nao existing : members)
+            if (id.equals(UUID.fromString(existing.id))) throw new IllegalArgumentException("Duplicate UUID");
+        Nao n = new Nao();
+        n.number = members.size() + 1;
+        n.id = id.toString();
+        members.add(n);
+        return n;
+    }
     public org.nagineco.doppel.appearance.NaoAppearanceRegistry appearanceRegistry() {
         org.nagineco.doppel.appearance.NaoAppearanceRegistry registry = new org.nagineco.doppel.appearance.NaoAppearanceRegistry();
         for (Nao n : members) registry.ensure(n.number, UUID.fromString(n.id), n.skinKey);
