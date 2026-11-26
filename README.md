@@ -545,3 +545,15 @@ DNMS本体の `org.nagineco.doppel.core.DnmsWorldHttpApi` をHTTP認証・入力
 
 ## 共通AI移管バッチ1
 RewardEstimate、SharedMemorySearch、MemoryDecision の正式実装をDNMS coreに集約。DNMS-Worldの旧実装はDNMS-LEGACYコメントで無効化し、互換Adapterのみ残す。Gradleで3クラスのblob hashを検証して取得する。Minecraft既存RLP・目標選択への統合、世界IDによる危険記憶分離、CI検証は未完了。今後の共通AI変更はDNMS側で実施する。
+
+
+## 独立起動・接続バッチ
+DNMSの standalone はFabric非依存のCLI接続モジュール。Java 21、Gradle、DNMS_WORLD_TOKEN（32文字以上）、DNMS_WORLD_URL（既定 http://127.0.0.1:8080）を使用。Worldを先に起動し、DNMSリポジトリで gradle -p standalone run --args=list または --args="spawn UUID x y z" を実行する。管理モードではWorldのnext/resetを拒否するが、初期24人生成・他のローカル管理は残る。既存DNMS-LEGACYコメントを維持。接続契約テストを追加したが実行結果は未確認。
+
+## 今後の実装（独立起動バッチ残件）
+- 両リポジトリのCI・実World接続・24/256人回帰試験。
+- 独立コアへの人格・個体記憶・MIP/RLP/意思決定・技能・人物台帳の統合。
+- DNMS主導のUUID発行・永続台帳・初期人口・管理権限一本化、World旧管理処理のコメントアウト。
+- 移動・採集・建築・保存・巻き戻しAPIと両Adapter実装。
+- 接続先選択・設定保存、世界ID、個体転送、障害時の整合性・再接続。
+- Minecraft既存AIとの統合、長期負荷試験、無料公開。
