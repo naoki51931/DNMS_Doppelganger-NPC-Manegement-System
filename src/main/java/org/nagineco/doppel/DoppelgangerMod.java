@@ -2179,7 +2179,7 @@ public class DoppelgangerMod implements ModInitializer {
             stand.equipStack(EquipmentSlot.CHEST, new ItemStack(Items.LEATHER_CHESTPLATE));
             stand.equipStack(EquipmentSlot.LEGS, new ItemStack(Items.LEATHER_LEGGINGS));
             stand.equipStack(EquipmentSlot.FEET, new ItemStack(Items.LEATHER_BOOTS));
-            stand.setCustomName(Text.literal("Doppel " + (i+1)));
+            stand.setCustomName(Text.literal("Doppel " + (i+1)).styled(style -> style.withInsertion("dnms:npc:" + (i+1))));
             stand.setCustomNameVisible(true);
             NpcSpawnGuard.register(ghosts, i, stand, () -> world.spawnEntity(stand), LOG::severe);
         }
