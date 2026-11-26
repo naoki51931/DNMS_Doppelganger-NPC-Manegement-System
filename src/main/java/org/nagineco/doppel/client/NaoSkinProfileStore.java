@@ -53,7 +53,7 @@ final class NaoSkinProfileStore {
             GameProfile profile = new GameProfile(id, data.getProperty("name", "Doppel"));
             profile.getProperties().put("textures", new Property("textures", data.getProperty("value"), data.getProperty("signature")));
             return MinecraftClient.getInstance().getSkinProvider().fetchSkinTextures(profile)
-                .thenApply(result -> result.orElseGet(() -> DefaultSkinHelper.getSkinTextures(id)));
+                .thenApply(result -> result != null ? result : DefaultSkinHelper.getSkinTextures(id));
         } catch (Exception ex) {
             return CompletableFuture.completedFuture(DefaultSkinHelper.getSkinTextures(id));
         }
