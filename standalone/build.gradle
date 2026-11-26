@@ -2,6 +2,6 @@ plugins { id 'application' }
 repositories { mavenCentral() }
 java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
 dependencies { implementation 'com.google.code.gson:gson:2.11.0'; testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'; testRuntimeOnly 'org.junit.platform:junit-platform-launcher' }
-sourceSets.main.java { srcDir '../src/main/java'; include 'org/nagineco/doppel/core/DnmsWorldApi.java', 'org/nagineco/doppel/core/DnmsWorldHttpApi.java', 'org/nagineco/standalone/**' }
+sourceSets.main.java { srcDir '../src/main/java'; include 'org/nagineco/doppel/core/WorldIdentityPolicy.java', 'org/nagineco/doppel/core/DnmsWorldApi.java', 'org/nagineco/doppel/core/DnmsWorldHttpApi.java', 'org/nagineco/standalone/**' }
 application { mainClass = 'org.nagineco.standalone.Main' }
 test { useJUnitPlatform() }
