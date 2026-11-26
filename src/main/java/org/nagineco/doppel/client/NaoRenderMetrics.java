@@ -6,14 +6,14 @@ import java.util.UUID;
 import org.slf4j.LoggerFactory;
 
 /** Measures successful renderer calls, not GPU frame time or FPS. */
-final class NaoRenderMetrics {
+public final class NaoRenderMetrics {
     private static final boolean ENABLED = Boolean.getBoolean("dnms.render.metrics");
     private static final long[] samples = new long[4096];
     private static final HashSet<UUID> entities = new HashSet<>();
     private static int count;
     private static long windowStart;
-    static long begin() { return ENABLED ? System.nanoTime() : 0L; }
-    static void end(UUID id, long start) {
+    public static long begin() { return ENABLED ? System.nanoTime() : 0L; }
+    public static void end(UUID id, long start) {
         if (!ENABLED) return;
         long now = System.nanoTime();
         if (count == 0) windowStart = start;
