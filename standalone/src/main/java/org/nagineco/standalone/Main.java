@@ -11,10 +11,13 @@ public final class Main {
     var root=java.nio.file.Path.of(args[1]);var id=client.worldId();
     if(args.length==3&&!id.equals(UUID.fromString(args[2])))throw new IllegalArgumentException("World UUID mismatch");
     client.bindWorld(id);
-    var result=new SpawnLedger(root.resolve(id.toString()).resolve("spawn.pending")).next(client);
-    if(!id.equals(client.worldId()))throw new IllegalStateException("World changed during request; inspect server state");
-    PopulationRegistry.capture(root,id,client);
-    System.out.println(result);return;
+    var result=new SpawnLedger(root.resolve(id.toString()).resolve("spawn.pending")).next(client,()->{
+     if(!id.equals(client.worldId()))throw new IllegalStateException("World changed during request; inspect server state");
+     PopulationRegistry.capture(root,id,client);
+    });
+    System.out.println(result);
+    if(result!=org.nagineco.doppel.core.DnmsWorldApi.SpawnResult.CREATED&&result!=org.nagineco.doppel.core.DnmsWorldApi.SpawnResult.ALREADY_EXISTS)System.exit(2);
+    return;
    }catch(java.io.IOException e){throw new java.io.UncheckedIOException(e);}
   }
   if(args.length==2&&args[0].equals("next")){try{System.out.println(new SpawnLedger(java.nio.file.Path.of(args[1])).next(client));return;}catch(java.io.IOException e){throw new java.io.UncheckedIOException(e);}}
