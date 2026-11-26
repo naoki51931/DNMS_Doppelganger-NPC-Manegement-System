@@ -23,6 +23,12 @@ public final class WorldClient implements DnmsWorldApi {
   try{return client.send(body==null?b.GET().build():b.POST(HttpRequest.BodyPublishers.ofString(body)).build(),HttpResponse.BodyHandlers.ofString());}
   catch(IOException e){throw new UncheckedIOException(e);}catch(InterruptedException e){Thread.currentThread().interrupt();throw new IllegalStateException(e);}
  }
+ private record WorldIdentity(UUID worldId){}
+ public UUID worldId(){
+  var request=HttpRequest.newBuilder(uri.resolve("/api/v1/world")).timeout(Duration.ofSeconds(10)).header("Authorization","Bearer "+token).GET().build();
+  try{var response=client.send(request,HttpResponse.BodyHandlers.ofString());if(response.statusCode()!=200)throw new IllegalStateException("World identity HTTP "+response.statusCode());return Objects.requireNonNull(gson.fromJson(response.body(),WorldIdentity.class).worldId());}
+  catch(IOException e){throw new UncheckedIOException(e);}catch(InterruptedException e){Thread.currentThread().interrupt();throw new IllegalStateException(e);}
+ }
  private record WireNpc(UUID id,int x,int y,int z,double health){}
  private record WireSnapshot(long tick,List<WireNpc> npcs){}
  public Snapshot snapshot(){var r=request(null);if(r.statusCode()!=200)throw new IllegalStateException("HTTP "+r.statusCode());var s=gson.fromJson(r.body(),WireSnapshot.class);return new Snapshot(s.tick(),s.npcs().stream().map(n->new Npc(n.id(),new Position(n.x(),n.y(),n.z()),n.health())).toList());}
