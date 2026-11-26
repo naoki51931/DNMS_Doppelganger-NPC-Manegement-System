@@ -1,5 +1,73 @@
 # Doppel NPC Management System (DNMS)
 
+**[導入方法](#install-dnms) ｜ [Windows](#install-win) ｜ [Mac](#install-mac) ｜ [Linux](#install-linux) ｜ [基本操作](#play-dnms) ｜ [DNMS-World無料体験版](https://github.com/naoki51931/DNMS-World#readme)**
+
+<a name="install-dnms"></a>
+
+## Minecraft版 DNMS の導入方法
+
+Minecraft Java Edition 1.21.1 専用の実験的な Fabric サーバーMODです。統合版（Bedrock）、Forge、NeoForge向けではありません。Android/iPhoneは公式対応外です。スマートフォンで試す場合は [DNMS-World無料体験版](https://naoki51931.github.io/DNMS-World/)（Pages公開後）をご利用ください。
+
+### 必要なもの
+- [Minecraft Java Edition](https://www.minecraft.net/download) 1.21.1
+- [Java 21 JDK](https://adoptium.net/)（OSとCPUに合うもの）
+- [Fabric Server Launcher](https://fabricmc.net/use/server/)（Minecraft 1.21.1を選択）
+- [Fabric API](https://modrinth.com/mod/fabric-api)（1.21.1 / Fabric対応版）
+- 自分でMODをビルドする場合：[Git](https://git-scm.com/downloads)、[Gradle 8.x](https://gradle.org/install/)
+
+<a name="install-win"></a>
+
+### Windows
+Java 21、Git、Gradle 8.xを導入し、PowerShellで次の共通ビルド手順を実行します。Fabricサーバー用の新規フォルダーを作り、ダウンロードしたサーバーJARを配置します。
+
+<a name="install-mac"></a>
+
+### Mac
+Apple SiliconまたはIntelに対応するJava 21を導入し、ターミナルで共通ビルド手順を実行します。Fabricサーバー用のフォルダーにサーバーJARを配置します。
+
+<a name="install-linux"></a>
+
+### Linux（Ubuntu等）
+Java 21、Git、Gradle 8.xを準備し、ターミナルで共通ビルド手順を実行します。UbuntuでJava 21が提供される場合は `sudo apt install openjdk-21-jdk git` で導入できます。Gradleは8.xを別途準備してください。
+
+### 共通ビルド手順
+```sh
+java -version
+gradle --version
+git clone https://github.com/naoki51931/DNMS_Doppelganger-NPC-Manegement-System.git
+cd DNMS_Doppelganger-NPC-Manegement-System
+gradle build
+```
+生成物は `build/libs/doppelganger-npc-system-0.1.0.jar` です。[GitHub Actions](https://github.com/naoki51931/DNMS_Doppelganger-NPC-Manegement-System/actions) でビルド状況も確認できます。配布済みJARの有無は保証しません。
+
+### Fabricサーバーの起動（共通）
+1. Fabric公式ページでMinecraft 1.21.1を選択してExecutable Server JARを取得し、新規サーバーフォルダーに置きます。以下ではそのファイルを `fabric-server.jar` に改名します。
+2. サーバーフォルダーで `java -Xmx2G -jar fabric-server.jar nogui` を実行します（2GBは試験用の例であり256人の動作保証ではありません）。
+3. 初回起動で生成される `eula.txt` の利用規約を確認し、同意する場合のみ `eula=true` に変更します。
+4. サーバー停止状態で `mods/` フォルダーにDNMSの生成JARとFabric API JARを入れます（存在しなければ作成）。
+5. 同じ起動コマンドでサーバーを起動し、Minecraft Java Edition 1.21.1のマルチプレイから同じPCなら `localhost` に接続します。サーバーコンソールで `op 自分のMinecraftユーザー名` を実行します。
+6. 外部公開は必須ではありません。既存ワールドはバックアップし、まず専用テストワールドで試してください。
+
+参考：[Fabric公式導入ガイド](https://wiki.fabricmc.net/install)
+
+<a name="play-dnms"></a>
+
+### 基本操作
+チャットで管理者として以下を実行します。
+
+| コマンド | 操作 |
+| --- | --- |
+| `/doppel dashboard` | 管理画面 |
+| `/doppel dashboard max 256` | 人数上限を設定 |
+| `/doppel dashboard bootstrap` | 初期24人のフリープレイ生成 |
+| `/doppel dashboard add 8` | 8人追加（上限以内） |
+| `/doppel life on` | 生活AIを有効化 |
+| `/doppel status` | 状態確認 |
+| `/doppel save` | 保存 |
+
+手動訓練方式を使う場合は、初期生成とは別に `/doppel start` と `/doppel next` を利用します。NPCは現在、防具立てによる代替表示です。実機動作・256人負荷は未検証です。下記の履歴には旧仕様も含まれます。
+
+
 ## 日本語：記憶想起・人物台帳・自律計画（2026-11-21）
 - `/doppel recall <slot> <topic>` は各奈央の個別記憶ファイル（MIP複製済みの他者エピソードを含む）をキーワード検索し、出典付きの一致行を返す。生活AIは長期目標をキーワードとして定期的に記憶を想起し、`lastRecalledMemory` に保持する。**これはルールベースのエピソード検索であり、LLMによる自由な意味理解や会話生成ではない。**
 - `/doppel person add <id>`、`person relate <from> <to> <role>`、`person event <from> <to> <detail>`、`person status <id>`。外部人物と奈央（`nao_1`〜`nao_256`）の人物台帳を `config/doppelganger/people.json` に保存する。関係ラベル：FRIEND, FAMILY, COLLEAGUE, PARTNER, SPOUSE, PARENT, CHILD, HOUSEMATE。相互関係と親子の逆関係を自動登録し、共有イベントを両者へ記録する。結婚式・育児・同居の物理行動は未実装。
