@@ -38,11 +38,14 @@ public final class NaoHumanoidRenderer extends LivingEntityRenderer<ArmorStandEn
             if (entry != null) {
                 var skin = entry.getSkinTextures();
                 CACHE.put(skinOwner, skin);
+                NaoSkinProfileStore.save(skinOwner, entry.getProfile());
                 if (CACHE.size() > 256) CACHE.remove(CACHE.keySet().iterator().next());
                 return skin;
             }
         }
-        return CACHE.getOrDefault(skinOwner, DefaultSkinHelper.getSkinTextures(skinOwner));
+        var cached = CACHE.get(skinOwner);
+        if (cached != null) return cached;
+        return NaoSkinProfileStore.resolve(skinOwner);
     }
     @Override
     public Identifier getTexture(ArmorStandEntity entity) { return skin(entity).texture(); }
