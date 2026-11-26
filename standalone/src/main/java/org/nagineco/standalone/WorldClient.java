@@ -8,7 +8,9 @@ import java.util.*;
 import java.io.*;
 public final class WorldClient implements DnmsWorldApi {
  private final URI uri; private final String token;
- private UUID expectedWorld;
+ private UUID expectedWorld,expectedEpoch;
+ public UUID epoch(){return Objects.requireNonNull(expectedEpoch);}
+ public void bindIdentity(){var identity=identity();expectedWorld=identity.worldId();expectedEpoch=Objects.requireNonNull(identity.epoch());}
  public void bindWorld(UUID id){expectedWorld=Objects.requireNonNull(id);}
  private final HttpClient client=HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
  private final Gson gson=new Gson();
@@ -23,13 +25,16 @@ public final class WorldClient implements DnmsWorldApi {
  private HttpResponse<String> request(String body){
   var b=HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(10)).header("Authorization","Bearer "+token);
   if(expectedWorld!=null)b.header("X-DNMS-World",expectedWorld.toString());
+  if(expectedEpoch!=null)b.header("X-DNMS-Epoch",expectedEpoch.toString());
   try{return client.send(body==null?b.GET().build():b.POST(HttpRequest.BodyPublishers.ofString(body)).build(),HttpResponse.BodyHandlers.ofString());}
   catch(IOException e){throw new UncheckedIOException(e);}catch(InterruptedException e){Thread.currentThread().interrupt();throw new IllegalStateException(e);}
  }
- private record WorldIdentity(UUID worldId){}
- public UUID worldId(){
+ private record WorldIdentity(UUID worldId,UUID epoch){}
+ public UUID worldId(){return identity().worldId();}
+ public boolean sameIdentity(){var i=identity();return Objects.equals(expectedWorld,i.worldId())&&Objects.equals(expectedEpoch,i.epoch());}
+ private WorldIdentity identity(){
   var request=HttpRequest.newBuilder(uri.resolve("/api/v1/world")).timeout(Duration.ofSeconds(10)).header("Authorization","Bearer "+token).GET().build();
-  try{var response=client.send(request,HttpResponse.BodyHandlers.ofString());if(response.statusCode()!=200)throw new IllegalStateException("World identity HTTP "+response.statusCode());return Objects.requireNonNull(gson.fromJson(response.body(),WorldIdentity.class).worldId());}
+  try{var response=client.send(request,HttpResponse.BodyHandlers.ofString());if(response.statusCode()!=200)throw new IllegalStateException("World identity HTTP "+response.statusCode());return Objects.requireNonNull(gson.fromJson(response.body(),WorldIdentity.class));}
   catch(IOException e){throw new UncheckedIOException(e);}catch(InterruptedException e){Thread.currentThread().interrupt();throw new IllegalStateException(e);}
  }
  private record WireNpc(UUID id,int x,int y,int z,double health){}
